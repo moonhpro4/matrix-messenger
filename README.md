@@ -23,12 +23,17 @@ This is an early, actively-developed beta. Core account creation, login, contact
 - Cloudflare Workers KV for account/message storage
 - Gmail SMTP for magic-link login emails
 
-## Building from source
+## Get the app
 
-1. Clone this repo
-2. Open in Android Studio
-3. Fill in your own Cloudflare Account ID in `Config.kt`
-4. Build and run
+1. Download the APK from [the latest release](../../releases/latest)
+2. Install it on your phone
+3. Open it, create an account, and start messaging
+
+No setup, no configuration — it just works.
+
+## For developers
+
+Want to build from source or contribute? The APK released above already has everything baked in via CI. If you're modifying the code yourself, secrets are pulled from GitHub Actions secrets at build time — see `.github/workflows/build.yml`.
 
 ## Contributing
 
