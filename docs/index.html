@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matrix Messenger — free chat, messaging and calling</title>
+<meta name="description" content="Matrix Messenger is an open-source messenger app. No phone number required. Runs on Android 5.0 and up.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12141c;
+    --bg-alt: #191c26;
+    --bg-panel: #1e222f;
+    --line: #2a2f3f;
+    --text: #ecedf3;
+    --text-dim: #8a8fa3;
+    --green: #3ed598;
+    --violet: #6c63ff;
+    --amber: #f2a65a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .display {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(18, 20, 28, 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .brand .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 12px var(--green);
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+
+  .nav-links a:hover { color: var(--text); }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative;
+    padding: 90px 0 70px;
+    overflow: hidden;
+  }
+
+  .mesh-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  .hero-inner {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 48px;
+    align-items: center;
+  }
+
+  @media (max-width: 860px) {
+    .hero-inner { grid-template-columns: 1fr; }
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--green);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .eyebrow .pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.4); }
+  }
+
+  .hero h1 {
+    font-size: clamp(36px, 5.5vw, 58px);
+    line-height: 1.04;
+    margin-bottom: 20px;
+  }
+
+  .hero h1 .accent { color: var(--green); }
+
+  .hero p.lead {
+    font-size: 17px;
+    color: var(--text-dim);
+    max-width: 480px;
+    margin-bottom: 32px;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 24px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .btn:hover { transform: translateY(-2px); }
+
+  .btn-primary {
+    background: var(--amber);
+    color: #1a1206;
+    box-shadow: 0 8px 24px -8px rgba(242, 166, 90, 0.5);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 12px 28px -8px rgba(242, 166, 90, 0.65);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    border-color: var(--line);
+    color: var(--text);
+  }
+
+  .btn-secondary:hover { border-color: var(--text-dim); }
+
+  .btn small {
+    display: block;
+    font-weight: 400;
+    font-size: 11px;
+    opacity: 0.75;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ---------- Phone mockup ---------- */
+  .phone {
+    position: relative;
+    margin: 0 auto;
+    width: 260px;
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 32px;
+    padding: 14px;
+    box-shadow: 0 40px 80px -30px rgba(0,0,0,0.6);
+  }
+
+  .phone-screen {
+    background: #0e1017;
+    border-radius: 20px;
+    padding: 16px 12px;
+    height: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .phone-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    padding: 0 4px 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 6px;
+  }
+
+  .bubble {
+    max-width: 78%;
+    padding: 10px 13px;
+    border-radius: 14px;
+    font-size: 13px;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: bubbleIn 0.5s ease forwards;
+  }
+
+  .bubble.them {
+    background: var(--bg-alt);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+
+  .bubble.me {
+    background: var(--violet);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+
+  .bubble:nth-child(2) { animation-delay: 0.3s; }
+  .bubble:nth-child(3) { animation-delay: 0.9s; }
+  .bubble:nth-child(4) { animation-delay: 1.5s; }
+  .bubble:nth-child(5) { animation-delay: 2.1s; }
+
+  @keyframes bubbleIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---------- Sections ---------- */
+  section { padding: 70px 0; }
+
+  .section-head {
+    text-align: center;
+    max-width: 560px;
+    margin: 0 auto 48px;
+  }
+
+  .section-head .eyebrow { display: block; text-align: center; }
+
+  .section-head h2 { font-size: clamp(26px, 4vw, 36px); margin-bottom: 12px; }
+  .section-head p { color: var(--text-dim); font-size: 15px; }
+
+  .grid-features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  @media (max-width: 760px) {
+    .grid-features { grid-template-columns: 1fr; }
+  }
+
+  .feature-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.6s ease, transform 0.6s ease, border-color 0.2s ease;
+  }
+
+  .feature-card.visible { opacity: 1; transform: translateY(0); }
+
+  .feature-card:hover { border-color: var(--green); }
+
+  .feature-card .icon-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .feature-card h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+
+  .feature-card p {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    margin: 0;
+  }
+
+  /* ---------- Web + About panel ---------- */
+  .split-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 760px) {
+    .split-panel { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 32px;
+  }
+
+  .panel .mono.tag {
+    font-size: 12px;
+    color: var(--violet);
+    margin-bottom: 14px;
+    display: block;
+  }
+
+  .panel h3 { font-size: 21px; margin-bottom: 12px; }
+  .panel p { color: var(--text-dim); font-size: 14.5px; margin-bottom: 20px; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 40px 0;
+    color: var(--text-dim);
+    font-size: 13.5px;
+  }
+
+  .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-links { display: flex; gap: 20px; }
+  .footer-links a:hover { color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, .bubble, .eyebrow .pulse, .feature-card { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="nav">
+    <div class="brand"><span class="dot"></span> Matrix Messenger</div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="web/">Web</a>
+      <a href="https://github.com/moonhpro4/matrix-messenger">GitHub</a>
+      <a href="#about">About Us</a>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <svg class="mesh-bg" viewBox="0 0 1080 500" preserveAspectRatio="none" aria-hidden="true">
+    <g stroke="#6C63FF" stroke-width="1" opacity="0.35">
+      <line x1="60" y1="80" x2="240" y2="160"/>
+      <line x1="240" y1="160" x2="180" y2="320"/>
+      <line x1="240" y1="160" x2="420" y2="100"/>
+      <line x1="420" y1="100" x2="600" y2="220"/>
+      <line x1="600" y1="220" x2="820" y2="140"/>
+      <line x1="600" y1="220" x2="700" y2="380"/>
+      <line x1="820" y1="140" x2="980" y2="220"/>
+      <line x1="180" y1="320" x2="380" y2="400"/>
+    </g>
+    <g fill="#3ED598">
+      <circle cx="60" cy="80" r="3.5"/>
+      <circle cx="240" cy="160" r="4"/>
+      <circle cx="180" cy="320" r="3"/>
+      <circle cx="420" cy="100" r="3"/>
+      <circle cx="600" cy="220" r="4.5"/>
+      <circle cx="820" cy="140" r="3"/>
+      <circle cx="980" cy="220" r="3"/>
+      <circle cx="700" cy="380" r="3"/>
+      <circle cx="380" cy="400" r="3"/>
+    </g>
+  </svg>
+
+  <div class="wrap hero-inner">
+    <div>
+      <div class="eyebrow"><span class="pulse"></span> OPEN SOURCE · BETA</div>
+      <h1>Chat without<br>giving up your<br><span class="accent">number.</span></h1>
+      <p class="lead">Matrix Messenger is a free, open-source messenger. Create an account with just a username — no phone number, ever. Runs smoothly down to Android 5.0.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" id="download-btn" href="https://github.com/moonhpro4/matrix-messenger/releases">
+          ⬇ Download Now
+          <small id="download-sub" class="mono">fetching latest release…</small>
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/moonhpro4/matrix-messenger">
+          View source on GitHub
+        </a>
+      </div>
+    </div>
+
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="phone-header">Pablo</div>
+        <div class="bubble them">hey are we still on for tonight?</div>
+        <div class="bubble me">yeah! sending you the address</div>
+        <div class="bubble me">📍 shared a contact</div>
+        <div class="bubble them">perfect, see you at 8</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">FEATURES</span>
+      <h2>Everything a messenger should do</h2>
+      <p>No bloat, no number required, no tracking beyond what you choose to back up yourself.</p>
+    </div>
+
+    <div class="grid-features">
+      <div class="feature-card">
+        <div class="icon-dot" style="background:rgba(62,213,152,0.12); color:var(--green);">@</div>
+        <h3>Username-only accounts</h3>
+        <p>Sign up with just a username and password. No phone number is ever collected.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon-dot" style="background:rgba(108,99,255,0.12); color:var(--violet);">▦</div>
+        <h3>Add by QR or username</h3>
+        <p>Scan a real QR code or search a username to add a contact instantly — no links, no redirects.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon-dot" style="background:rgba(242,166,90,0.12); color:var(--amber);">☎</div>
+        <h3>Voice &amp; video calling</h3>
+        <p>Mute your mic, toggle your camera mid-call, switch speaker/earpiece, or share your screen.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon-dot" style="background:rgba(62,213,152,0.12); color:var(--green);">⛁</div>
+        <h3>Full backups</h3>
+        <p>Export every contact and every message into a single text file. Restore it any time, on any device.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon-dot" style="background:rgba(108,99,255,0.12); color:var(--violet);">⛔</div>
+        <h3>Block, mute, report</h3>
+        <p>Full control over who can reach you, and a direct line to report problems.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon-dot" style="background:rgba(242,166,90,0.12); color:var(--amber);">▤</div>
+        <h3>Runs on old hardware</h3>
+        <p>Built lean on purpose — Matrix Messenger supports Android 5.0 and up.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap split-panel">
+    <div class="panel">
+      <span class="mono tag">/web</span>
+      <h3>Use it in your browser</h3>
+      <p>A lightweight web client — log in and message your contacts from any computer, no install required.</p>
+      <a class="btn btn-secondary" href="web/">Open Web Version →</a>
+    </div>
+    <div class="panel" id="about">
+      <span class="mono tag">ABOUT US</span>
+      <h3>Built by Moonlight</h3>
+      <p>Matrix Messenger is an independent, open-source project. It's actively developed and still in beta — your feedback shapes what gets built next.</p>
+      <a class="btn btn-secondary" href="https://github.com/moonhpro4/matrix-messenger/issues/new">Report an issue →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-row">
+    <div>© 2026 Matrix Messenger — MIT Licensed</div>
+    <div class="footer-links">
+      <a href="https://github.com/moonhpro4/matrix-messenger">GitHub</a>
+      <a href="https://github.com/moonhpro4/matrix-messenger/releases">Releases</a>
+      <a href="https://github.com/moonhpro4/matrix-messenger/issues/new">Report Matrix</a>
+      <a href="web/">Web App</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Scroll-reveal for feature cards (lightweight, no library)
+  const cards = document.querySelectorAll('.feature-card');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  cards.forEach(c => observer.observe(c));
+
+  // Fetch latest release for the download button (works even for prereleases,
+  // unlike the /releases/latest endpoint which excludes them)
+  fetch('https://api.github.com/repos/moonhpro4/matrix-messenger/releases')
+    .then(r => r.json())
+    .then(releases => {
+      if (!Array.isArray(releases) || releases.length === 0) return;
+      const latest = releases[0];
+      const apkAsset = latest.assets.find(a => a.name.endsWith('.apk'));
+      const sub = document.getElementById('download-sub');
+      const btn = document.getElementById('download-btn');
+      if (apkAsset) {
+        btn.href = apkAsset.browser_download_url;
+        sub.textContent = latest.tag_name + ' · ' + (apkAsset.size / (1024*1024)).toFixed(1) + ' MB';
+      } else {
+        sub.textContent = 'see all releases';
+      }
+    })
+    .catch(() => {
+      document.getElementById('download-sub').textContent = 'see releases on GitHub';
+    });
+</script>
+
+</body>
+</html>

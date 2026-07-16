@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matrix Messenger — Web</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12141c; --bg-alt: #191c26; --bg-panel: #1e222f; --line: #2a2f3f;
+    --text: #ecedf3; --text-dim: #8a8fa3; --green: #3ed598; --violet: #6c63ff; --amber: #f2a65a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Inter', sans-serif; height: 100vh; display: flex; flex-direction: column;
+  }
+  h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; margin: 0; }
+  input, button { font-family: inherit; font-size: 14px; }
+  a { color: var(--green); }
+
+  /* Auth screen */
+  #auth-screen {
+    flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .auth-box {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 36px; width: 100%; max-width: 380px;
+  }
+  .auth-box h1 { font-size: 24px; margin-bottom: 6px; }
+  .auth-box .sub { color: var(--text-dim); font-size: 13.5px; margin-bottom: 24px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; }
+  .field input {
+    width: 100%; padding: 11px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg-alt); color: var(--text);
+  }
+  .field input:focus { outline: none; border-color: var(--green); }
+  .btn {
+    width: 100%; padding: 12px; border-radius: 8px; border: none; cursor: pointer;
+    background: var(--green); color: #06251a; font-weight: 600; margin-top: 6px;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn.secondary { background: transparent; border: 1px solid var(--line); color: var(--text); }
+  .switch-link { text-align: center; font-size: 13px; color: var(--text-dim); margin-top: 18px; cursor: pointer; }
+  .status-msg { font-size: 13px; color: var(--amber); margin-top: 10px; min-height: 18px; }
+
+  /* Chat screen */
+  #chat-screen { flex: 1; display: none; overflow: hidden; }
+  #chat-screen.active { display: flex; }
+  .sidebar {
+    width: 280px; border-right: 1px solid var(--line); display: flex; flex-direction: column;
+    background: var(--bg-panel);
+  }
+  .sidebar-header {
+    padding: 18px; border-bottom: 1px solid var(--line); display: flex;
+    justify-content: space-between; align-items: center;
+  }
+  .sidebar-header .me { font-weight: 600; }
+  .sidebar-header button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; }
+  .contact-list { flex: 1; overflow-y: auto; }
+  .contact-item {
+    padding: 14px 18px; cursor: pointer; border-bottom: 1px solid var(--line); font-size: 14px;
+  }
+  .contact-item:hover, .contact-item.active { background: var(--bg-alt); }
+  .add-contact-row { padding: 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+  .add-contact-row input {
+    flex: 1; padding: 9px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--bg-alt); color: var(--text);
+  }
+  .add-contact-row button {
+    padding: 9px 14px; border-radius: 6px; border: none; background: var(--violet);
+    color: white; cursor: pointer;
+  }
+
+  .conversation { flex: 1; display: flex; flex-direction: column; }
+  .conversation-header { padding: 18px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .bubble { max-width: 60%; padding: 10px 14px; border-radius: 14px; font-size: 14px; }
+  .bubble.them { background: var(--bg-alt); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .bubble.me { background: var(--violet); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .empty-state { color: var(--text-dim); text-align: center; margin-top: 60px; font-size: 14px; }
+  .message-input-row { padding: 16px; border-top: 1px solid var(--line); display: flex; gap: 10px; }
+  .message-input-row input {
+    flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg-alt); color: var(--text);
+  }
+  .message-input-row button {
+    padding: 12px 20px; border-radius: 8px; border: none; background: var(--green);
+    color: #06251a; font-weight: 600; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="auth-screen">
+  <div class="auth-box">
+    <h1 id="auth-title">Log in</h1>
+    <div class="sub">Matrix Messenger — free chat, messaging and calling.</div>
+
+    <div class="field">
+      <label id="login-label-field">Username</label>
+      <input id="login-username" type="text" placeholder="yourusername">
+    </div>
+    <div class="field" id="password-field">
+      <label>Password</label>
+      <input id="login-password" type="password" placeholder="••••••••">
+    </div>
+    <div class="field" id="email-field" style="display:none">
+      <label>Email (optional)</label>
+      <input id="signup-email" type="email" placeholder="you@example.com">
+    </div>
+
+    <button class="btn" id="submit-btn" onclick="handleLogin()">Log In</button>
+    <div class="status-msg" id="status-msg"></div>
+
+    <div class="switch-link" onclick="toggleMode()" id="switch-link">Don't have an account? Sign up</div>
+  </div>
+</div>
+
+<div id="chat-screen">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="me" id="me-label"></span>
+      <button onclick="logOut()">Log out</button>
+    </div>
+    <div class="contact-list" id="contact-list"></div>
+    <div class="add-contact-row">
+      <input id="new-contact-input" placeholder="Add username…" onkeydown="if(event.key==='Enter')addContact()">
+      <button onclick="addContact()">Add</button>
+    </div>
+  </div>
+  <div class="conversation">
+    <div class="conversation-header" id="conversation-header">Select a contact</div>
+    <div class="messages" id="messages-view"><div class="empty-state">Pick a contact on the left to start chatting</div></div>
+    <div class="message-input-row">
+      <input id="message-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendMessage()">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =========================================================================
+// IMPORTANT: this calls Cloudflare's KV API directly from browser JS.
+// The account/namespace/token below are visible to anyone who views this
+// page's source or opens browser devtools — there is no way to hide a
+// secret shipped in client-side JS. This mirrors the same accepted risk
+// as the Android app's embedded token, but is easier to find (no
+// decompiling needed, just "View Source").
+// =========================================================================
+const CF_ACCOUNT_ID = "7c68c8b52efb92fa6e34befc66149788";
+const CF_NAMESPACE_ID = "3213b55d7c5f4683b041b80bb5d3c947";
+const CF_API_TOKEN = "cfut_LeJVTDwxgDLcBE5dJhnhbFNwB29fpMHVgcjiEXIQ6239d86d";
+const KV_BASE = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/`;
+
+async function kvGet(key) {
+  const res = await fetch(KV_BASE + encodeURIComponent(key), {
+    headers: { "Authorization": "Bearer " + CF_API_TOKEN }
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("KV GET failed: " + res.status);
+  return await res.text();
+}
+
+async function kvPut(key, value) {
+  const res = await fetch(KV_BASE + encodeURIComponent(key), {
+    method: "PUT",
+    headers: { "Authorization": "Bearer " + CF_API_TOKEN, "Content-Type": "text/plain" },
+    body: value
+  });
+  if (!res.ok) throw new Error("KV PUT failed: " + res.status);
+}
+
+// ---------------- Password hashing (PBKDF2, matches the Android app's format) ----------------
+// Format: "{iterations}.{saltBase64}.{hashBase64}" — same as PasswordHasher.kt,
+// so an account created on one platform can log in on the other.
+
+function toBase64(bytes) {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+}
+function fromBase64(b64) {
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+async function hashPassword(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iterations = 100000;
+  const hashBits = await pbkdf2(password, salt, iterations, 256);
+  return `${iterations}.${toBase64(salt)}.${toBase64(hashBits)}`;
+}
+
+async function verifyPassword(password, stored) {
+  const parts = stored.split(".");
+  if (parts.length !== 3) return false;
+  const iterations = parseInt(parts[0], 10);
+  const salt = fromBase64(parts[1]);
+  const expected = fromBase64(parts[2]);
+  const actual = await pbkdf2(password, salt, iterations, expected.length * 8);
+  const actualBytes = new Uint8Array(actual);
+  if (actualBytes.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < actualBytes.length; i++) diff |= actualBytes[i] ^ expected[i];
+  return diff === 0;
+}
+
+async function pbkdf2(password, salt, iterations, bitLength) {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]
+  );
+  return await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    keyMaterial, bitLength
+  );
+}
+
+// ---------------- Auth state ----------------
+let currentUsername = null;
+let isSignupMode = false;
+let activeContact = null;
+let pollInterval = null;
+
+function toggleMode() {
+  isSignupMode = !isSignupMode;
+  document.getElementById("auth-title").textContent = isSignupMode ? "Create your account" : "Log in";
+  document.getElementById("submit-btn").textContent = isSignupMode ? "Sign Up" : "Log In";
+  document.getElementById("switch-link").textContent = isSignupMode
+    ? "Already have an account? Log in" : "Don't have an account? Sign up";
+  document.getElementById("email-field").style.display = isSignupMode ? "block" : "none";
+  document.getElementById("status-msg").textContent = "";
+}
+
+async function handleLogin() {
+  const username = document.getElementById("login-username").value.trim().toLowerCase();
+  const password = document.getElementById("login-password").value;
+  const statusMsg = document.getElementById("status-msg");
+
+  if (!username) { statusMsg.textContent = "Enter a username."; return; }
+  statusMsg.textContent = "Working...";
+
+  try {
+    if (isSignupMode) {
+      const email = document.getElementById("signup-email").value.trim();
+      if (password.length < 6) { statusMsg.textContent = "Password must be at least 6 characters."; return; }
+
+      const existing = await kvGet(username);
+      if (existing) { statusMsg.textContent = "This username is already taken."; return; }
+
+      const record = {
+        username, passwordHash: await hashPassword(password),
+        email: email || null, createdAt: Math.floor(Date.now() / 1000)
+      };
+      await kvPut(username, JSON.stringify(record));
+      if (email) await kvPut("emaillookup:" + email.toLowerCase(), username);
+
+      enterChat(username);
+    } else {
+      const json = await kvGet(username);
+      if (!json) { statusMsg.textContent = "Incorrect username or password."; return; }
+      const record = JSON.parse(json);
+      const valid = await verifyPassword(password, record.passwordHash);
+      if (!valid) { statusMsg.textContent = "Incorrect username or password."; return; }
+      enterChat(username);
+    }
+  } catch (e) {
+    statusMsg.textContent = "Something went wrong: " + e.message;
+  }
+}
+
+function enterChat(username) {
+  currentUsername = username;
+  document.getElementById("auth-screen").style.display = "none";
+  document.getElementById("chat-screen").classList.add("active");
+  document.getElementById("me-label").textContent = username;
+  loadContacts();
+}
+
+function logOut() {
+  currentUsername = null;
+  activeContact = null;
+  if (pollInterval) clearInterval(pollInterval);
+  document.getElementById("auth-screen").style.display = "flex";
+  document.getElementById("chat-screen").classList.remove("active");
+  document.getElementById("login-username").value = "";
+  document.getElementById("login-password").value = "";
+}
+
+// ---------------- Contacts ----------------
+async function loadContacts() {
+  const json = await kvGet("contacts:" + currentUsername);
+  const contacts = json ? JSON.parse(json) : [];
+  const list = document.getElementById("contact-list");
+  list.innerHTML = "";
+  contacts.forEach(name => {
+    const div = document.createElement("div");
+    div.className = "contact-item";
+    div.textContent = name;
+    div.onclick = () => openConversation(name);
+    list.appendChild(div);
+  });
+}
+
+async function addContact() {
+  const input = document.getElementById("new-contact-input");
+  const name = input.value.trim().toLowerCase();
+  if (!name) return;
+
+  if (name === currentUsername) { alert("You can't add yourself."); return; }
+
+  const exists = await kvGet(name);
+  if (!exists) { alert("No account found with that username."); return; }
+
+  const json = await kvGet("contacts:" + currentUsername);
+  const contacts = json ? JSON.parse(json) : [];
+  if (contacts.includes(name)) { alert("Already in your contacts."); return; }
+
+  contacts.push(name);
+  await kvPut("contacts:" + currentUsername, JSON.stringify(contacts));
+  input.value = "";
+  loadContacts();
+}
+
+// ---------------- Messages ----------------
+function conversationKey(a, b) {
+  return "messages:" + [a, b].sort().join(":");
+}
+
+async function openConversation(contact) {
+  activeContact = contact;
+  document.querySelectorAll(".contact-item").forEach(el => {
+    el.classList.toggle("active", el.textContent === contact);
+  });
+  document.getElementById("conversation-header").textContent = contact;
+  await loadMessages();
+
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(loadMessages, 4000);
+}
+
+async function loadMessages() {
+  if (!activeContact) return;
+  const json = await kvGet(conversationKey(currentUsername, activeContact));
+  const messages = json ? JSON.parse(json) : [];
+  const view = document.getElementById("messages-view");
+
+  if (messages.length === 0) {
+    view.innerHTML = '<div class="empty-state">No messages yet — say hi!</div>';
+    return;
+  }
+
+  view.innerHTML = "";
+  messages.forEach(m => {
+    const div = document.createElement("div");
+    div.className = "bubble " + (m.from === currentUsername ? "me" : "them");
+    div.textContent = m.text;
+    view.appendChild(div);
+  });
+  view.scrollTop = view.scrollHeight;
+}
+
+async function sendMessage() {
+  if (!activeContact) return;
+  const input = document.getElementById("message-input");
+  const text = input.value.trim();
+  if (!text) return;
+
+  const key = conversationKey(currentUsername, activeContact);
+  const json = await kvGet(key);
+  const messages = json ? JSON.parse(json) : [];
+  messages.push({
+    id: crypto.randomUUID(), from: currentUsername, text,
+    timestamp: Math.floor(Date.now() / 1000)
+  });
+  await kvPut(key, JSON.stringify(messages));
+  input.value = "";
+  loadMessages();
+}
+</script>
+
+</body>
+</html>
