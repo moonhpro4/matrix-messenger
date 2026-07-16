@@ -2,6 +2,7 @@ package com.moonlight.matrixmessenger
 
 import android.content.Intent
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.widget.ImageButton
@@ -45,6 +46,9 @@ class CallActivity : AppCompatActivity() {
     private var speakerOn = true
     private var screenSharing = false
 
+    private var ringtonePlayer: MediaPlayer? = null
+    private var callingSoundPlayer: MediaPlayer? = null
+
     private lateinit var remoteVideoView: SurfaceViewRenderer
     private lateinit var localVideoView: SurfaceViewRenderer
     private lateinit var muteButton: ImageButton
@@ -69,6 +73,7 @@ class CallActivity : AppCompatActivity() {
         currentUsername = intent.getStringExtra("username") ?: "unknown"
         otherUsername = intent.getStringExtra("otherUsername") ?: "unknown"
         val startAsVideo = intent.getBooleanExtra("startAsVideo", false)
+        val isIncoming = intent.getBooleanExtra("isIncoming", false)
         cameraEnabled = startAsVideo
 
         bindViews()
@@ -79,7 +84,88 @@ class CallActivity : AppCompatActivity() {
         }
         wireButtonListeners()
 
-        callStatusText.text = "Calling $otherUsername..."
+        if (isIncoming) {
+            callStatusText.text = "$otherUsername is calling..."
+            playRingtone()
+        } else {
+            callStatusText.text = "Calling $otherUsername..."
+            playCallingSound()
+            pollForCalleeResponse()
+        }
+    }
+
+    // ---------------- Call sounds ----------------
+
+    /** Plays on the CALLEE's side while the call is ringing, looping until answered/declined. */
+    private fun playRingtone() {
+        stopAllCallSounds()
+        ringtonePlayer = MediaPlayer.create(this, R.raw.ringtone)?.apply {
+            isLooping = true
+            start()
+        }
+    }
+
+    /** Plays on the CALLER's side while waiting for the other person to pick up. */
+    private fun playCallingSound() {
+        stopAllCallSounds()
+        callingSoundPlayer = MediaPlayer.create(this, R.raw.calling_sound)?.apply {
+            isLooping = true
+            start()
+        }
+    }
+
+    /** Plays once when a call is declined or hung up by either side. */
+    private fun playHangUpSound() {
+        stopAllCallSounds()
+        MediaPlayer.create(this, R.raw.hang_up)?.apply {
+            setOnCompletionListener { it.release() }
+            start()
+        }
+    }
+
+    private fun stopAllCallSounds() {
+        ringtonePlayer?.stop()
+        ringtonePlayer?.release()
+        ringtonePlayer = null
+
+        callingSoundPlayer?.stop()
+        callingSoundPlayer?.release()
+        callingSoundPlayer = null
+    }
+
+    /**
+     * Caller-side: periodically checks whether the callee answered or
+     * declined, so the calling sound stops and the UI updates accordingly.
+     * This is the same lightweight KV-polling pattern used elsewhere in
+     * the app (checks every few seconds, not a live push).
+     */
+    private fun pollForCalleeResponse() {
+        val handler = android.os.Handler(mainLooper)
+        val pollRunnable = object : Runnable {
+            override fun run() {
+                Thread {
+                    val status = callService.checkCallStatus(otherUsername)
+                    runOnUiThread {
+                        when (status?.status) {
+                            CallStatus.ANSWERED -> {
+                                stopAllCallSounds()
+                                callStatusText.text = "Connected"
+                            }
+                            CallStatus.DECLINED, CallStatus.MISSED, CallStatus.ENDED -> {
+                                playHangUpSound()
+                                callStatusText.text = "Call ended"
+                                android.os.Handler(mainLooper).postDelayed({ finish() }, 1500)
+                            }
+                            else -> {
+                                // still ringing — check again shortly
+                                handler.postDelayed(this, 3000)
+                            }
+                        }
+                    }
+                }.start()
+            }
+        }
+        handler.postDelayed(pollRunnable, 3000)
     }
 
     private fun bindViews() {
@@ -291,13 +377,15 @@ class CallActivity : AppCompatActivity() {
 
     private fun hangUp() {
         callService.endCall(otherUsername)
+        playHangUpSound()
         disableCamera()
         stopScreenShare()
-        finish()
+        android.os.Handler(mainLooper).postDelayed({ finish() }, 800)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopAllCallSounds()
         audioManager.mode = AudioManager.MODE_NORMAL
         remoteVideoView.release()
         localVideoView.release()
