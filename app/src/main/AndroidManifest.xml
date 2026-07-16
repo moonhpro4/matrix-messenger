@@ -27,6 +27,10 @@
         <activity android:name=".SignUpActivity" android:exported="false" />
         <activity android:name=".HomeActivity" android:exported="false" />
         <activity android:name=".CallActivity" android:exported="false" />
+        <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".LanguageActivity" android:exported="false" />
+        <activity android:name=".AccountSettingsActivity" android:exported="false" />
+        <activity android:name=".BackupsActivity" android:exported="false" />
 
         <service
             android:name=".ScreenShareService"

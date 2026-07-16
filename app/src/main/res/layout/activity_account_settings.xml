@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Account"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Change name -->
+    <EditText
+        android:id="@+id/newUsernameInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="New username" />
+    <EditText
+        android:id="@+id/usernameChangePasswordInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Current password (to confirm)"
+        android:inputType="textPassword"
+        android:layout_marginBottom="8dp" />
+    <Button
+        android:id="@+id/changeUsernameButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Change Username"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Change password -->
+    <EditText
+        android:id="@+id/oldPasswordInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Current password"
+        android:inputType="textPassword" />
+    <EditText
+        android:id="@+id/newPasswordInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="New password"
+        android:inputType="textPassword"
+        android:layout_marginBottom="8dp" />
+    <Button
+        android:id="@+id/changePasswordButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Change Password"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Passkey -->
+    <Button
+        android:id="@+id/addPasskeyButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Add a Passkey"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#CC0000"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Log out -->
+    <Button
+        android:id="@+id/logOutButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Log Out"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Delete account -->
+    <EditText
+        android:id="@+id/deletePasswordInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Password (to confirm deletion)"
+        android:inputType="textPassword" />
+    <Button
+        android:id="@+id/deleteAccountButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Delete Account"
+        android:backgroundTint="#CC0000" />
+
+</LinearLayout>
+</ScrollView>

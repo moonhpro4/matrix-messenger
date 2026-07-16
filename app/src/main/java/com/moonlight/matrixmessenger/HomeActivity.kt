@@ -36,6 +36,12 @@ class HomeActivity : AppCompatActivity() {
             showAddContactDialog()
         }
 
+        findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
+            val intent = android.content.Intent(this, SettingsActivity::class.java)
+            intent.putExtra("username", currentUsername)
+            startActivity(intent)
+        }
+
         loadContacts()
     }
 

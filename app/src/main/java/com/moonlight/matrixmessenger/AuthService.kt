@@ -108,6 +108,87 @@ class AuthService(private val kv: KvStore = CloudflareKvClient()) {
         return AuthResult.ok(record.username)
     }
 
+    // ---------------- CHANGE PASSWORD ----------------
+
+    fun changePassword(username: String, oldPassword: String, newPassword: String): AuthResult {
+        val key = normalizeUsername(username)
+
+        if (newPassword.length < 6) return AuthResult.fail("New password must be at least 6 characters.")
+
+        val json = kv.get(key) ?: return AuthResult.fail("Account not found.")
+        val record = try {
+            UserRecord.fromJson(json)
+        } catch (e: Exception) {
+            return AuthResult.fail("Account not found.")
+        }
+
+        if (!PasswordHasher.verify(oldPassword, record.passwordHash)) {
+            return AuthResult.fail("Current password is incorrect.")
+        }
+
+        val updated = record.copy(passwordHash = PasswordHasher.hash(newPassword))
+        kv.put(key, updated.toJson())
+
+        return AuthResult.ok(key)
+    }
+
+    // ---------------- CHANGE USERNAME (display name) ----------------
+
+    fun changeUsername(oldUsername: String, newUsername: String, password: String): AuthResult {
+        val oldKey = normalizeUsername(oldUsername)
+        val newKey = normalizeUsername(newUsername)
+
+        if (newKey.isBlank()) return AuthResult.fail("Username cannot be empty.")
+        if (newKey == oldKey) return AuthResult.fail("That's already your username.")
+
+        val existingNew = kv.get(newKey)
+        if (existingNew != null) return AuthResult.fail("This username is already taken.")
+
+        val json = kv.get(oldKey) ?: return AuthResult.fail("Account not found.")
+        val record = try {
+            UserRecord.fromJson(json)
+        } catch (e: Exception) {
+            return AuthResult.fail("Account not found.")
+        }
+
+        if (!PasswordHasher.verify(password, record.passwordHash)) {
+            return AuthResult.fail("Incorrect password.")
+        }
+
+        val updated = record.copy(username = newKey)
+        kv.put(newKey, updated.toJson())
+        kv.delete(oldKey)
+
+        return AuthResult.ok(newKey)
+    }
+
+    // ---------------- DELETE ACCOUNT ----------------
+
+    fun deleteAccount(username: String, password: String): AuthResult {
+        val key = normalizeUsername(username)
+
+        val json = kv.get(key) ?: return AuthResult.fail("Account not found.")
+        val record = try {
+            UserRecord.fromJson(json)
+        } catch (e: Exception) {
+            return AuthResult.fail("Account not found.")
+        }
+
+        if (!PasswordHasher.verify(password, record.passwordHash)) {
+            return AuthResult.fail("Incorrect password.")
+        }
+
+        kv.delete(key)
+        if (record.email != null) {
+            kv.delete("emaillookup:" + record.email.toLowerCase(java.util.Locale.ROOT))
+        }
+        kv.delete("contacts:$key")
+        kv.delete("blocked:$key")
+        kv.delete("muted:$key")
+
+        return AuthResult.ok(null)
+    }
+
     // ---------------- HELPERS ----------------
 
     private fun findUsernameByEmail(email: String): String? {
