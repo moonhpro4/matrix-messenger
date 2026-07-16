@@ -37,7 +37,10 @@ jobs:
 
       - name: Build debug APK
         id: build
-        run: gradle assembleDebug --stacktrace 2>&1 | tee build_log.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleDebug --stacktrace 2>&1 | tee build_log.txt
         continue-on-error: true
 
       - name: Post build log on failure (temporary debug step)
