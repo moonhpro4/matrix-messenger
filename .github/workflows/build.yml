@@ -34,7 +34,21 @@ jobs:
           gradle-version: 8.5
 
       - name: Build debug APK
-        run: gradle assembleDebug
+        id: build
+        run: gradle assembleDebug 2>&1 | tee build_log.txt
+        continue-on-error: true
+
+      - name: Post build log on failure (temporary debug step)
+        if: steps.build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -c 60000 build_log.txt > truncated_log.txt
+          gh api repos/${{ github.repository }}/issues -f title="CI debug log $(date +%s)" -f body="$(cat truncated_log.txt)"
+
+      - name: Fail job if build failed
+        if: steps.build.outcome == 'failure'
+        run: exit 1
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
