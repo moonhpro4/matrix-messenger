@@ -2,6 +2,8 @@
 
 An open-source messenger app built with Kotlin — free chat, messaging, and calling, with no phone number required. Just create an account with a username and password (or log in via a magic email link) and start messaging.
 
+🌐 **Official website: [moonhpro4.github.io/matrix-messenger](https://moonhpro4.github.io/matrix-messenger/)**
+
 > ⚠️ **This project is in beta.** Expect bugs. Found one? [Open an issue](../../issues/new).
 
 ## Features (in progress)
@@ -12,6 +14,10 @@ An open-source messenger app built with Kotlin — free chat, messaging, and cal
 - Voice and video calling
 - Block, mute, and report contacts
 - Group chats
+
+## Matrix Web
+
+Don't want to install anything? Use Matrix Messenger right in your browser at **[moonhpro4.github.io/matrix-messenger/web](https://moonhpro4.github.io/matrix-messenger/web/)** — log in with the same account as the app and message your contacts from any computer.
 
 ## Status
 
