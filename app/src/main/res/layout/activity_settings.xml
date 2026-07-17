@@ -28,6 +28,11 @@
         style="@style/SettingsRow"
         android:text="Backups" />
 
+    <TextView
+        android:id="@+id/ringtonesRow"
+        style="@style/SettingsRow"
+        android:text="Ringtones" />
+
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"

@@ -35,6 +35,12 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
 
+        findViewById<TextView>(R.id.ringtonesRow).setOnClickListener {
+            startActivity(Intent(this, RingtoneSettingsActivity::class.java).apply {
+                putExtra("username", username)
+            })
+        }
+
         findViewById<TextView>(R.id.reportMatrixRow).setOnClickListener {
             val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_ISSUES_URL))
             startActivity(browserIntent)

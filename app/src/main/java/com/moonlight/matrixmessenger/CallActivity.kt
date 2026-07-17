@@ -99,6 +99,34 @@ class CallActivity : AppCompatActivity() {
     /** Plays on the CALLEE's side while the call is ringing, looping until answered/declined. */
     private fun playRingtone() {
         stopAllCallSounds()
+
+        val ringtoneService = RingtoneService(CloudflareKvClient())
+        Thread {
+            val selectedId = ringtoneService.getSelectedRingtoneId(currentUsername)
+            val customAudio = if (selectedId != null) ringtoneService.getCustomRingtoneAudio(currentUsername, selectedId) else null
+
+            runOnUiThread {
+                if (customAudio != null) {
+                    try {
+                        val tempFile = java.io.File.createTempFile("ringtone", ".mp3", cacheDir)
+                        tempFile.writeBytes(customAudio)
+                        ringtonePlayer = MediaPlayer().apply {
+                            setDataSource(tempFile.absolutePath)
+                            isLooping = true
+                            prepare()
+                            start()
+                        }
+                    } catch (e: Exception) {
+                        playDefaultRingtone()
+                    }
+                } else {
+                    playDefaultRingtone()
+                }
+            }
+        }.start()
+    }
+
+    private fun playDefaultRingtone() {
         ringtonePlayer = MediaPlayer.create(this, R.raw.ringtone)?.apply {
             isLooping = true
             start()
