@@ -34,7 +34,7 @@
         android:orientation="horizontal"
         android:gravity="center"
         android:padding="24dp"
-        android:weightSum="5">
+        android:weightSum="4">
 
         <ImageButton
             android:id="@+id/muteButton"
@@ -64,16 +64,6 @@
             android:background="#333333"
             android:contentDescription="Toggle speaker"
             android:src="@android:drawable/ic_lock_silent_mode_off" />
-
-        <ImageButton
-            android:id="@+id/screenShareButton"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:background="#333333"
-            android:contentDescription="Share screen"
-            android:src="@android:drawable/ic_menu_share" />
 
         <ImageButton
             android:id="@+id/hangUpButton"
