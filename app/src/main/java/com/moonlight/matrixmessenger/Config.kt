@@ -3,22 +3,17 @@ package com.moonlight.matrixmessenger
 /**
  * Central place for all credentials and settings.
  *
- * IMPORTANT: real values are NOT stored here or committed to git.
- * They're loaded from local.properties (gitignored) via BuildConfig,
- * or you can set them directly in local.properties as:
- *   CLOUDFLARE_ACCOUNT_ID=xxx
- *   CLOUDFLARE_NAMESPACE_ID=xxx
- *   CLOUDFLARE_API_TOKEN=xxx
- *   GMAIL_APP_PASSWORD=xxx
+ * NOTE: Cloudflare credentials are no longer needed here at all — the app
+ * talks to our Cloudflare Worker proxy (see CloudflareKvClient.kt), which
+ * holds the real KV binding server-side. There's no API token anywhere
+ * in this app anymore, which ends the token-leak/revocation loop we kept
+ * hitting when a token lived in committed code or public web JS.
  *
- * See README.md "Building from source" for setup instructions.
+ * Only the Gmail App Password still needs to be supplied via
+ * local.properties (gitignored) -> BuildConfig, since email sending is
+ * the one remaining thing this app does directly.
  */
 object Config {
-    // --- Cloudflare KV ---
-    val CLOUDFLARE_ACCOUNT_ID: String = BuildConfig.CLOUDFLARE_ACCOUNT_ID
-    val CLOUDFLARE_NAMESPACE_ID: String = BuildConfig.CLOUDFLARE_NAMESPACE_ID
-    val CLOUDFLARE_API_TOKEN: String = BuildConfig.CLOUDFLARE_API_TOKEN
-
     // --- Gmail SMTP ---
     const val SMTP_HOST = "smtp.gmail.com"
     const val SMTP_PORT = 587
@@ -30,4 +25,3 @@ object Config {
     const val MAGIC_LINK_EXPIRY_MINUTES = 20
     const val APP_URI_SCHEME = "myapp://verify?token="
 }
-

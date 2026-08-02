@@ -20,22 +20,20 @@ interface KvStore {
 }
 
 /**
- * Talks directly to Cloudflare's Workers KV REST API using only
- * java.net.HttpURLConnection (no external HTTP library needed).
- * Docs: https://developers.cloudflare.com/api/operations/workers-kv-namespace-write-key-value-pair
+ * Talks to our Cloudflare Worker proxy (matrix-messenger-worker.js),
+ * NOT Cloudflare's API directly. The Worker holds the real KV binding
+ * server-side, so no API token needs to exist in this app at all —
+ * this is what finally ends the token-leak/revocation loop we kept
+ * hitting when a token lived in committed code or public web JS.
  */
 class CloudflareKvClient : KvStore {
 
-    private val baseUrl =
-        "https://api.cloudflare.com/client/v4/accounts/${Config.CLOUDFLARE_ACCOUNT_ID}" +
-        "/storage/kv/namespaces/${Config.CLOUDFLARE_NAMESPACE_ID}/values/"
+    private val workerBase = "https://matrix.opergo.workers.dev/kv/"
 
-    /** Returns the raw string value for a key, or null if it doesn't exist. */
     override fun get(key: String): String? {
-        val url = URL(baseUrl + URLEncoder.encode(key, "UTF-8"))
+        val url = URL(workerBase + URLEncoder.encode(key, "UTF-8"))
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
-        conn.setRequestProperty("Authorization", "Bearer ${Config.CLOUDFLARE_API_TOKEN}")
 
         return try {
             val status = conn.responseCode
@@ -52,13 +50,11 @@ class CloudflareKvClient : KvStore {
         }
     }
 
-    /** Writes a key/value pair. Overwrites if the key already exists. */
     override fun put(key: String, value: String) {
-        val url = URL(baseUrl + URLEncoder.encode(key, "UTF-8"))
+        val url = URL(workerBase + URLEncoder.encode(key, "UTF-8"))
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "PUT"
         conn.doOutput = true
-        conn.setRequestProperty("Authorization", "Bearer ${Config.CLOUDFLARE_API_TOKEN}")
         conn.setRequestProperty("Content-Type", "text/plain")
 
         try {
@@ -80,10 +76,9 @@ class CloudflareKvClient : KvStore {
     }
 
     override fun delete(key: String) {
-        val url = URL(baseUrl + URLEncoder.encode(key, "UTF-8"))
+        val url = URL(workerBase + URLEncoder.encode(key, "UTF-8"))
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "DELETE"
-        conn.setRequestProperty("Authorization", "Bearer ${Config.CLOUDFLARE_API_TOKEN}")
 
         try {
             val status = conn.responseCode

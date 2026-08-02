@@ -19,6 +19,15 @@
         android:text="Custom ringtones you add are private to your account — no one else can see or use them."
         android:textSize="12.5sp"
         android:textColor="#888888"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/attributionText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Picked by fans. If any of these raise a copyright concern, please email moonhpro318@gmail.com and we'll take it down as fast as possible."
+        android:textSize="12sp"
+        android:textColor="#3366CC"
         android:layout_marginBottom="16dp" />
 
     <Button

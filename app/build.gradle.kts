@@ -23,9 +23,6 @@ android {
         versionCode = 1
         versionName = "0.1.0-beta"
 
-        buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", "\"${secret("CLOUDFLARE_ACCOUNT_ID")}\"")
-        buildConfigField("String", "CLOUDFLARE_NAMESPACE_ID", "\"${secret("CLOUDFLARE_NAMESPACE_ID")}\"")
-        buildConfigField("String", "CLOUDFLARE_API_TOKEN", "\"${secret("CLOUDFLARE_API_TOKEN")}\"")
         buildConfigField("String", "GMAIL_APP_PASSWORD", "\"${secret("GMAIL_APP_PASSWORD")}\"")
     }
 

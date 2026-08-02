@@ -30,6 +30,7 @@
         <activity android:name=".AccountSettingsActivity" android:exported="false" />
         <activity android:name=".BackupsActivity" android:exported="false" />
         <activity android:name=".RingtoneSettingsActivity" android:exported="false" />
+        <activity android:name=".ContactSupportActivity" android:exported="false" />
 
     </application>
 </manifest>

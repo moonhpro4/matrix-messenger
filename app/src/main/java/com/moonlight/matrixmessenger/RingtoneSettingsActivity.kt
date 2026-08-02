@@ -1,5 +1,6 @@
 package com.moonlight.matrixmessenger
 
+import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -7,6 +8,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ListView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -26,7 +28,21 @@ class RingtoneSettingsActivity : AppCompatActivity() {
     private lateinit var ringtoneList: ListView
     private var previewPlayer: MediaPlayer? = null
 
-    // Row 0 is always "Pulse" (the bundled default); rows after are custom, in this order.
+    // Bundled built-in ringtones — picked by fans, not handpicked.
+    // Report any copyright concern to moonhpro318@gmail.com and it comes down fast.
+    private val builtInRingtones = listOf(
+        "Pulse (default)" to R.raw.ringtone,
+        "Frrank" to R.raw.frrank,
+        "Halloween Ringtone" to R.raw.halloween_ringtone,
+        "Matone" to R.raw.matone,
+        "Nerdeysen" to R.raw.nerdeysen,
+        "Offical Matrix Ringtone" to R.raw.offical_matrix_ringtone,
+        "Sus Ohio Ringotne" to R.raw.sus_ohio_ringotne,
+        "Wieird Ringtone" to R.raw.wieird_ringtone
+    )
+
+    // Rows: builtInRingtones first (position = index into builtInRingtones),
+    // then customRingtones after (position - builtInRingtones.size).
     private var customRingtones: List<RingtoneMeta> = emptyList()
 
     private val pickAudioLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -42,6 +58,14 @@ class RingtoneSettingsActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.addRingtoneButton).setOnClickListener {
             pickAudioLauncher.launch(arrayOf("audio/*"))
+        }
+
+        findViewById<TextView>(R.id.attributionText).setOnClickListener {
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:moonhpro318@gmail.com")
+                putExtra(Intent.EXTRA_SUBJECT, "Ringtone copyright concern")
+            }
+            startActivity(Intent.createChooser(intent, "Send email"))
         }
 
         loadRingtones()
@@ -61,7 +85,12 @@ class RingtoneSettingsActivity : AppCompatActivity() {
 
     private fun renderList(selectedId: String?) {
         val labels = mutableListOf<String>()
-        labels.add((if (selectedId == null) "✓ " else "") + "Pulse (default)")
+
+        builtInRingtones.forEachIndexed { index, (name, _) ->
+            // Position 0 (Pulse) is selected when selectedId is null; others are never "selected by default"
+            val isSelected = (index == 0 && selectedId == null) || selectedId == "builtin:$index"
+            labels.add((if (isSelected) "✓ " else "") + name)
+        }
         customRingtones.forEach { meta ->
             val prefix = if (meta.id == selectedId) "✓ " else ""
             labels.add(prefix + meta.name)
@@ -70,25 +99,41 @@ class RingtoneSettingsActivity : AppCompatActivity() {
         ringtoneList.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, labels)
 
         ringtoneList.setOnItemClickListener { _, _, position, _ ->
-            if (position == 0) {
-                previewAndSelect(null)
+            if (position < builtInRingtones.size) {
+                val selectionId = if (position == 0) null else "builtin:$position"
+                previewAndSelectBuiltIn(selectionId, builtInRingtones[position].second)
             } else {
-                val meta = customRingtones[position - 1]
-                previewAndSelect(meta.id)
+                val meta = customRingtones[position - builtInRingtones.size]
+                previewAndSelectCustom(meta.id)
             }
         }
 
         ringtoneList.setOnItemLongClickListener { _, _, position, _ ->
-            if (position == 0) {
-                Toast.makeText(this, "The default ringtone can't be deleted", Toast.LENGTH_SHORT).show()
+            if (position < builtInRingtones.size) {
+                Toast.makeText(this, "Built-in ringtones can't be deleted", Toast.LENGTH_SHORT).show()
             } else {
-                confirmDelete(customRingtones[position - 1])
+                confirmDelete(customRingtones[position - builtInRingtones.size])
             }
             true
         }
     }
 
-    private fun previewAndSelect(ringtoneId: String?) {
+    private fun previewAndSelectBuiltIn(selectionId: String?, resId: Int) {
+        previewPlayer?.release()
+        previewPlayer = null
+
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                ringtoneService.setSelectedRingtone(currentUsername, selectionId)
+            }
+            renderList(selectionId)
+
+            previewPlayer = MediaPlayer.create(this@RingtoneSettingsActivity, resId)
+            previewPlayer?.start()
+        }
+    }
+
+    private fun previewAndSelectCustom(ringtoneId: String) {
         previewPlayer?.release()
         previewPlayer = null
 
@@ -98,23 +143,17 @@ class RingtoneSettingsActivity : AppCompatActivity() {
             }
             renderList(ringtoneId)
 
-            // Brief preview so the person can hear what they picked
-            if (ringtoneId == null) {
-                previewPlayer = MediaPlayer.create(this@RingtoneSettingsActivity, R.raw.ringtone)
-                previewPlayer?.start()
-            } else {
-                val audioBytes = withContext(Dispatchers.IO) {
-                    ringtoneService.getCustomRingtoneAudio(currentUsername, ringtoneId)
-                }
-                if (audioBytes != null) {
-                    val tempFile = java.io.File.createTempFile("preview", ".mp3", cacheDir)
-                    tempFile.writeBytes(audioBytes)
-                    previewPlayer = MediaPlayer().apply {
-                        setDataSource(tempFile.absolutePath)
-                        prepare()
-                        start()
-                        setOnCompletionListener { tempFile.delete() }
-                    }
+            val audioBytes = withContext(Dispatchers.IO) {
+                ringtoneService.getCustomRingtoneAudio(currentUsername, ringtoneId)
+            }
+            if (audioBytes != null) {
+                val tempFile = java.io.File.createTempFile("preview", ".mp3", cacheDir)
+                tempFile.writeBytes(audioBytes)
+                previewPlayer = MediaPlayer().apply {
+                    setDataSource(tempFile.absolutePath)
+                    prepare()
+                    start()
+                    setOnCompletionListener { tempFile.delete() }
                 }
             }
         }

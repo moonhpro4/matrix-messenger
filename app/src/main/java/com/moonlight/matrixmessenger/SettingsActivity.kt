@@ -45,5 +45,9 @@ class SettingsActivity : AppCompatActivity() {
             val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_ISSUES_URL))
             startActivity(browserIntent)
         }
+
+        findViewById<TextView>(R.id.contactSupportRow).setOnClickListener {
+            startActivity(Intent(this, ContactSupportActivity::class.java))
+        }
     }
 }

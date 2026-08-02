@@ -279,34 +279,53 @@ class CallActivity : AppCompatActivity() {
     private fun playRingtone() {
         stopAllCallSounds()
 
+        // Keep this list in the same order as RingtoneSettingsActivity's
+        // builtInRingtones, since "builtin:N" refers to this index.
+        val builtInResIds = listOf(
+            R.raw.ringtone, R.raw.frrank, R.raw.halloween_ringtone, R.raw.matone,
+            R.raw.nerdeysen, R.raw.offical_matrix_ringtone, R.raw.sus_ohio_ringotne, R.raw.wieird_ringtone
+        )
+
         val ringtoneService = RingtoneService(CloudflareKvClient())
         Thread {
             val selectedId = ringtoneService.getSelectedRingtoneId(currentUsername)
-            val customAudio = if (selectedId != null) ringtoneService.getCustomRingtoneAudio(currentUsername, selectedId) else null
 
-            runOnUiThread {
-                if (customAudio != null) {
-                    try {
-                        val tempFile = java.io.File.createTempFile("ringtone", ".mp3", cacheDir)
-                        tempFile.writeBytes(customAudio)
-                        ringtonePlayer = MediaPlayer().apply {
-                            setDataSource(tempFile.absolutePath)
-                            isLooping = true
-                            prepare()
-                            start()
+            when {
+                selectedId == null -> {
+                    runOnUiThread { playBuiltInRingtone(builtInResIds[0]) }
+                }
+                selectedId.startsWith("builtin:") -> {
+                    val index = selectedId.removePrefix("builtin:").toIntOrNull()
+                    val resId = if (index != null && index in builtInResIds.indices) builtInResIds[index] else builtInResIds[0]
+                    runOnUiThread { playBuiltInRingtone(resId) }
+                }
+                else -> {
+                    val customAudio = ringtoneService.getCustomRingtoneAudio(currentUsername, selectedId)
+                    runOnUiThread {
+                        if (customAudio != null) {
+                            try {
+                                val tempFile = java.io.File.createTempFile("ringtone", ".mp3", cacheDir)
+                                tempFile.writeBytes(customAudio)
+                                ringtonePlayer = MediaPlayer().apply {
+                                    setDataSource(tempFile.absolutePath)
+                                    isLooping = true
+                                    prepare()
+                                    start()
+                                }
+                            } catch (e: Exception) {
+                                playBuiltInRingtone(builtInResIds[0])
+                            }
+                        } else {
+                            playBuiltInRingtone(builtInResIds[0])
                         }
-                    } catch (e: Exception) {
-                        playDefaultRingtone()
                     }
-                } else {
-                    playDefaultRingtone()
                 }
             }
         }.start()
     }
 
-    private fun playDefaultRingtone() {
-        ringtonePlayer = MediaPlayer.create(this, R.raw.ringtone)?.apply {
+    private fun playBuiltInRingtone(resId: Int) {
+        ringtonePlayer = MediaPlayer.create(this, resId)?.apply {
             isLooping = true
             start()
         }
