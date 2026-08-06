@@ -65,10 +65,14 @@ class HomeActivity : AppCompatActivity() {
 
     private fun loadContacts() {
         scope.launch {
-            allContacts = withContext(Dispatchers.IO) {
-                contactService.listContacts(currentUsername)
+            try {
+                allContacts = withContext(Dispatchers.IO) {
+                    contactService.listContacts(currentUsername)
+                }
+                renderFilteredContacts(findViewById<EditText>(R.id.searchInput).text.toString())
+            } catch (e: Exception) {
+                Toast.makeText(this@HomeActivity, "Couldn't load contacts — check your connection", Toast.LENGTH_SHORT).show()
             }
-            renderFilteredContacts(findViewById<EditText>(R.id.searchInput).text.toString())
         }
     }
 
@@ -76,13 +80,17 @@ class HomeActivity : AppCompatActivity() {
         val filtered = if (query.isBlank()) allContacts else allContacts.filter { it.contains(query.trim().lowercase()) }
 
         scope.launch {
-            val labels = filtered.map { identity ->
-                withContext(Dispatchers.IO) { labelFor(identity) }
-            }
-            val adapter = ArrayAdapter(this@HomeActivity, android.R.layout.simple_list_item_1, labels)
-            contactsList.adapter = adapter
-            contactsList.setOnItemClickListener { _, _, position, _ ->
-                openChat(filtered[position])
+            try {
+                val labels = filtered.map { identity ->
+                    withContext(Dispatchers.IO) { labelFor(identity) }
+                }
+                val adapter = ArrayAdapter(this@HomeActivity, android.R.layout.simple_list_item_1, labels)
+                contactsList.adapter = adapter
+                contactsList.setOnItemClickListener { _, _, position, _ ->
+                    openChat(filtered[position])
+                }
+            } catch (e: Exception) {
+                // Leave the previous list showing rather than crash on a network blip.
             }
         }
     }

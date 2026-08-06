@@ -80,18 +80,22 @@ class ChatActivity : AppCompatActivity() {
 
     private fun loadBadge() {
         scope.launch {
-            val badgeLabel = withContext(Dispatchers.IO) {
-                when {
-                    AuthService.isOfficialAccount(otherUsername) -> "✓ Official Matrix Account"
-                    authService.getUserRecord(otherUsername)?.verified == true -> "✓ Verified"
-                    else -> null
+            try {
+                val badgeLabel = withContext(Dispatchers.IO) {
+                    when {
+                        AuthService.isOfficialAccount(otherUsername) -> "✓ Official Matrix Account"
+                        authService.getUserRecord(otherUsername)?.verified == true -> "✓ Verified"
+                        else -> null
+                    }
                 }
-            }
-            if (badgeLabel != null) {
-                findViewById<TextView>(R.id.badgeText).apply {
-                    text = badgeLabel
-                    visibility = android.view.View.VISIBLE
+                if (badgeLabel != null) {
+                    findViewById<TextView>(R.id.badgeText).apply {
+                        text = badgeLabel
+                        visibility = android.view.View.VISIBLE
+                    }
                 }
+            } catch (e: Exception) {
+                // Badge is cosmetic — never worth crashing the chat over.
             }
         }
     }
@@ -100,8 +104,12 @@ class ChatActivity : AppCompatActivity() {
 
     private fun sendText(text: String) {
         scope.launch {
-            withContext(Dispatchers.IO) { messageService.sendMessage(currentUsername, otherUsername, text) }
-            loadMessages()
+            try {
+                withContext(Dispatchers.IO) { messageService.sendMessage(currentUsername, otherUsername, text) }
+                loadMessages()
+            } catch (e: Exception) {
+                Toast.makeText(this@ChatActivity, "Couldn't send — check your connection", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -118,22 +126,27 @@ class ChatActivity : AppCompatActivity() {
 
     private fun loadMessages() {
         scope.launch {
-            val messages = withContext(Dispatchers.IO) {
-                messageService.getAllMessages(currentUsername, otherUsername)
-            }
-            if (messages.size == lastMessageCount) return@launch // nothing new, skip re-render
-            lastMessageCount = messages.size
+            try {
+                val messages = withContext(Dispatchers.IO) {
+                    messageService.getAllMessages(currentUsername, otherUsername)
+                }
+                if (messages.size == lastMessageCount) return@launch // nothing new, skip re-render
+                lastMessageCount = messages.size
 
-            val labels = messages.map { msg ->
-                val who = if (msg.from == currentUsername) "You" else otherUsername
-                if (msg.text.startsWith(VOICE_MARKER)) "$who: 🎤 Voice message (tap to play)" else "$who: ${msg.text}"
+                val labels = messages.map { msg ->
+                    val who = if (msg.from == currentUsername) "You" else otherUsername
+                    if (msg.text.startsWith(VOICE_MARKER)) "$who: 🎤 Voice message (tap to play)" else "$who: ${msg.text}"
+                }
+                messagesList.adapter = ArrayAdapter(this@ChatActivity, android.R.layout.simple_list_item_1, labels)
+                messagesList.setOnItemClickListener { _, _, position, _ ->
+                    val msg = messages[position]
+                    if (msg.text.startsWith(VOICE_MARKER)) playVoiceMessage(msg.text.removePrefix(VOICE_MARKER))
+                }
+                messagesList.setSelection(labels.size - 1)
+            } catch (e: Exception) {
+                // A single failed poll shouldn't crash the chat — it'll just
+                // retry on the next 4-second tick.
             }
-            messagesList.adapter = ArrayAdapter(this@ChatActivity, android.R.layout.simple_list_item_1, labels)
-            messagesList.setOnItemClickListener { _, _, position, _ ->
-                val msg = messages[position]
-                if (msg.text.startsWith(VOICE_MARKER)) playVoiceMessage(msg.text.removePrefix(VOICE_MARKER))
-            }
-            messagesList.setSelection(labels.size - 1)
         }
     }
 

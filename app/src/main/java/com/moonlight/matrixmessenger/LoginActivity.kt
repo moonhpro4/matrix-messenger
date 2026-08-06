@@ -27,7 +27,13 @@ class LoginActivity : AppCompatActivity() {
         // Silently provision the official account the first time any
         // device runs the app, so it's always there to log into/message.
         scope.launch {
-            withContext(Dispatchers.IO) { authService.ensureOfficialAccountExists() }
+            try {
+                withContext(Dispatchers.IO) { authService.ensureOfficialAccountExists() }
+            } catch (e: Exception) {
+                // Silently ignore — worst case the official account isn't
+                // provisioned yet this launch, but the app must not crash
+                // over a network hiccup just from opening the login screen.
+            }
         }
 
         val usernameInput = findViewById<EditText>(R.id.usernameInput)
