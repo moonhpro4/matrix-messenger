@@ -1,43 +1,47 @@
 package com.moonlight.matrixmessenger
 
 /**
- * Manages each user's contact list, stored in KV as a JSON array of usernames
- * under key "contacts:{owner}". Kept intentionally simple (flat list of
- * usernames) since KV has no query support beyond exact-key lookup.
+ * Manages each user's contact list, stored in KV under key
+ * "contacts:{subdomain}:{username}" as a JSON array of full identities
+ * (e.g. "bob@matrix.fun"). [owner] and contact references throughout this
+ * file are full "username@subdomain" identity strings.
  */
 class ContactService(private val kv: KvStore) {
 
-    private fun contactsKey(owner: String) = "contacts:${owner.trim().toLowerCase(java.util.Locale.ROOT)}"
+    private fun keyPrefixOf(fullIdentity: String): String =
+        Identity.parse(fullIdentity)?.keyPrefix() ?: fullIdentity.trim().lowercase()
+
+    private fun contactsKey(owner: String) = "contacts:${keyPrefixOf(owner)}"
 
     /**
-     * Adds [contactUsername] to [owner]'s contact list.
-     * Verifies the contact actually exists as a registered user first —
-     * scanning a QR code with a username that was never signed up should
-     * fail clearly rather than silently adding a ghost contact.
+     * Adds [contactIdentity] (a full "username@subdomain" string) to
+     * [owner]'s contact list. Verifies the contact actually exists as a
+     * registered account first.
      */
-    fun addContact(owner: String, contactUsername: String): AuthResult {
-        val ownerKey = owner.trim().toLowerCase(java.util.Locale.ROOT)
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
+    fun addContact(owner: String, contactIdentity: String): AuthResult {
+        val ownerNorm = Identity.parse(owner)?.full() ?: owner.trim().lowercase()
+        val contactNorm = Identity.parse(contactIdentity)?.full()
+            ?: return AuthResult.fail("Enter a username@subdomain, e.g. bob@matrix.fun.")
 
-        if (ownerKey == contactKey) {
+        if (ownerNorm == contactNorm) {
             return AuthResult.fail("You can't add yourself as a contact.")
         }
 
-        // Confirm the contact is a real registered account
-        val contactExists = kv.get(contactKey) != null
+        val contactKeyPrefix = keyPrefixOf(contactNorm)
+        val contactExists = kv.get("user:$contactKeyPrefix") != null
         if (!contactExists) {
-            return AuthResult.fail("No account found with that username.")
+            return AuthResult.fail("No account found with that username and subdomain.")
         }
 
-        val current = listContacts(ownerKey).toMutableList()
-        if (current.contains(contactKey)) {
+        val current = listContacts(ownerNorm).toMutableList()
+        if (current.contains(contactNorm)) {
             return AuthResult.fail("Already in your contacts.")
         }
 
-        current.add(contactKey)
-        kv.put(contactsKey(ownerKey), SimpleJsonArray.encode(current))
+        current.add(contactNorm)
+        kv.put(contactsKey(ownerNorm), SimpleJsonArray.encode(current))
 
-        return AuthResult.ok(contactKey)
+        return AuthResult.ok(contactNorm)
     }
 
     fun listContacts(owner: String): List<String> {
@@ -45,34 +49,30 @@ class ContactService(private val kv: KvStore) {
         return SimpleJsonArray.decode(json)
     }
 
-    fun removeContact(owner: String, contactUsername: String) {
-        val ownerKey = owner.trim().toLowerCase(java.util.Locale.ROOT)
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
-        val current = listContacts(ownerKey).toMutableList()
-        current.remove(contactKey)
-        kv.put(contactsKey(ownerKey), SimpleJsonArray.encode(current))
+    fun removeContact(owner: String, contactIdentity: String) {
+        val current = listContacts(owner).toMutableList()
+        current.remove(Identity.parse(contactIdentity)?.full() ?: contactIdentity)
+        kv.put(contactsKey(owner), SimpleJsonArray.encode(current))
     }
 
     // ---------------- BLOCK ----------------
 
-    private fun blockedKey(owner: String) = "blocked:${owner.trim().toLowerCase(java.util.Locale.ROOT)}"
+    private fun blockedKey(owner: String) = "blocked:${keyPrefixOf(owner)}"
 
-    fun blockContact(owner: String, contactUsername: String) {
-        val ownerKey = owner.trim().toLowerCase(java.util.Locale.ROOT)
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
-        val current = listBlocked(ownerKey).toMutableList()
-        if (!current.contains(contactKey)) {
-            current.add(contactKey)
-            kv.put(blockedKey(ownerKey), SimpleJsonArray.encode(current))
+    fun blockContact(owner: String, contactIdentity: String) {
+        val contactNorm = Identity.parse(contactIdentity)?.full() ?: contactIdentity
+        val current = listBlocked(owner).toMutableList()
+        if (!current.contains(contactNorm)) {
+            current.add(contactNorm)
+            kv.put(blockedKey(owner), SimpleJsonArray.encode(current))
         }
     }
 
-    fun unblockContact(owner: String, contactUsername: String) {
-        val ownerKey = owner.trim().toLowerCase(java.util.Locale.ROOT)
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
-        val current = listBlocked(ownerKey).toMutableList()
-        current.remove(contactKey)
-        kv.put(blockedKey(ownerKey), SimpleJsonArray.encode(current))
+    fun unblockContact(owner: String, contactIdentity: String) {
+        val contactNorm = Identity.parse(contactIdentity)?.full() ?: contactIdentity
+        val current = listBlocked(owner).toMutableList()
+        current.remove(contactNorm)
+        kv.put(blockedKey(owner), SimpleJsonArray.encode(current))
     }
 
     fun listBlocked(owner: String): List<String> {
@@ -80,31 +80,29 @@ class ContactService(private val kv: KvStore) {
         return SimpleJsonArray.decode(json)
     }
 
-    fun isBlocked(owner: String, contactUsername: String): Boolean {
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
-        return listBlocked(owner).contains(contactKey)
+    fun isBlocked(owner: String, contactIdentity: String): Boolean {
+        val contactNorm = Identity.parse(contactIdentity)?.full() ?: contactIdentity
+        return listBlocked(owner).contains(contactNorm)
     }
 
     // ---------------- MUTE ----------------
 
-    private fun mutedKey(owner: String) = "muted:${owner.trim().toLowerCase(java.util.Locale.ROOT)}"
+    private fun mutedKey(owner: String) = "muted:${keyPrefixOf(owner)}"
 
-    fun muteContact(owner: String, contactUsername: String) {
-        val ownerKey = owner.trim().toLowerCase(java.util.Locale.ROOT)
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
-        val current = listMuted(ownerKey).toMutableList()
-        if (!current.contains(contactKey)) {
-            current.add(contactKey)
-            kv.put(mutedKey(ownerKey), SimpleJsonArray.encode(current))
+    fun muteContact(owner: String, contactIdentity: String) {
+        val contactNorm = Identity.parse(contactIdentity)?.full() ?: contactIdentity
+        val current = listMuted(owner).toMutableList()
+        if (!current.contains(contactNorm)) {
+            current.add(contactNorm)
+            kv.put(mutedKey(owner), SimpleJsonArray.encode(current))
         }
     }
 
-    fun unmuteContact(owner: String, contactUsername: String) {
-        val ownerKey = owner.trim().toLowerCase(java.util.Locale.ROOT)
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
-        val current = listMuted(ownerKey).toMutableList()
-        current.remove(contactKey)
-        kv.put(mutedKey(ownerKey), SimpleJsonArray.encode(current))
+    fun unmuteContact(owner: String, contactIdentity: String) {
+        val contactNorm = Identity.parse(contactIdentity)?.full() ?: contactIdentity
+        val current = listMuted(owner).toMutableList()
+        current.remove(contactNorm)
+        kv.put(mutedKey(owner), SimpleJsonArray.encode(current))
     }
 
     fun listMuted(owner: String): List<String> {
@@ -112,34 +110,28 @@ class ContactService(private val kv: KvStore) {
         return SimpleJsonArray.decode(json)
     }
 
-    fun isMuted(owner: String, contactUsername: String): Boolean {
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
-        return listMuted(owner).contains(contactKey)
+    fun isMuted(owner: String, contactIdentity: String): Boolean {
+        val contactNorm = Identity.parse(contactIdentity)?.full() ?: contactIdentity
+        return listMuted(owner).contains(contactNorm)
     }
 
     // ---------------- REPORT ----------------
 
-    /**
-     * Reports are stored append-style under a per-owner list of report
-     * records, so a person can report the same contact more than once
-     * (e.g. after repeated bad behavior) without overwriting history.
-     */
-    private fun reportsKey() = "reports:all" // simple flat log; fine at small scale
+    private fun reportsKey() = "reports:all"
 
-    fun reportContact(owner: String, contactUsername: String, reason: String) {
-        val ownerKey = owner.trim().toLowerCase(java.util.Locale.ROOT)
-        val contactKey = contactUsername.trim().toLowerCase(java.util.Locale.ROOT)
+    fun reportContact(owner: String, contactIdentity: String, reason: String) {
+        val ownerNorm = Identity.parse(owner)?.full() ?: owner
+        val contactNorm = Identity.parse(contactIdentity)?.full() ?: contactIdentity
         val existing = kv.get(reportsKey())
         val current = if (existing != null) SimpleJsonArray.decode(existing).toMutableList() else mutableListOf()
-        val entry = """{"reportedBy":"$ownerKey","reportedUser":"$contactKey","reason":"${reason.replace("\"", "\\\"")}","timestamp":${java.time.Instant.now().epochSecond}}"""
+        val entry = """{"reportedBy":"$ownerNorm","reportedUser":"$contactNorm","reason":"${reason.replace("\"", "\\\"")}","timestamp":${java.time.Instant.now().epochSecond}}"""
         current.add(entry)
         kv.put(reportsKey(), SimpleJsonArray.encode(current))
     }
 }
 
 /**
- * Minimal hand-rolled JSON array of strings — e.g. ["alice","bob"].
- * Matches the same "no external JSON library" approach as Models.kt.
+ * Minimal hand-rolled JSON array of strings — e.g. ["alice@matrix.fun","bob@clou.org"].
  */
 object SimpleJsonArray {
     fun encode(items: List<String>): String {

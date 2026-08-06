@@ -6,7 +6,7 @@ import java.util.Base64
 
 data class ChatMessage(
     val id: String,
-    val from: String,
+    val from: String, // full identity, e.g. "waseem@matrix.fun"
     val text: String,
     val timestamp: Long
 ) {
@@ -31,20 +31,19 @@ data class ChatMessage(
 
 /**
  * Stores and retrieves messages for 1:1 conversations, polling-based.
- * Each conversation is stored as ONE key holding a JSON array of messages —
- * simple and correct for small/personal-scale conversation volume, but
- * note it means the whole message list is rewritten on every send (KV
- * doesn't support appending). Fine for friends/family scale; would need a
- * different storage shape (e.g. one key per message) if this ever grows
- * to high-volume group chats.
+ * [userA]/[userB]/[from]/[to] throughout are full "username@subdomain"
+ * identities, not bare usernames.
  */
 class MessageService(private val kv: KvStore) {
 
+    private val authService = AuthService(kv)
+
+    private fun normalize(fullIdentity: String): String =
+        Identity.parse(fullIdentity)?.full() ?: fullIdentity.trim().lowercase()
+
     /** Deterministic conversation key regardless of who's "from" or "to". */
     private fun conversationKey(userA: String, userB: String): String {
-        val a = userA.trim().toLowerCase(java.util.Locale.ROOT)
-        val b = userB.trim().toLowerCase(java.util.Locale.ROOT)
-        val sorted = listOf(a, b).sorted()
+        val sorted = listOf(normalize(userA), normalize(userB)).sorted()
         return "messages:${sorted[0]}:${sorted[1]}"
     }
 
@@ -54,13 +53,22 @@ class MessageService(private val kv: KvStore) {
 
         val message = ChatMessage(
             id = generateId(),
-            from = from.trim().toLowerCase(java.util.Locale.ROOT),
+            from = normalize(from),
             text = text,
             timestamp = Instant.now().epochSecond
         )
         existing.add(message)
 
         kv.put(key, encodeMessages(existing))
+
+        // Verified-badge trigger: if the OFFICIAL matrix account sends the
+        // secret phrase to someone, that recipient becomes verified.
+        if (AuthService.isOfficialAccount(from) &&
+            text.trim().equals(AuthService.VERIFIED_TRIGGER_PHRASE, ignoreCase = true)
+        ) {
+            authService.markVerified(normalize(to))
+        }
+
         return message
     }
 
@@ -72,8 +80,6 @@ class MessageService(private val kv: KvStore) {
 
     /**
      * For polling: returns only messages newer than [sinceTimestamp].
-     * Call this every few seconds from the app with the timestamp of the
-     * last message you already have.
      */
     fun getNewMessages(userA: String, userB: String, sinceTimestamp: Long): List<ChatMessage> {
         return getAllMessages(userA, userB).filter { it.timestamp > sinceTimestamp }
@@ -87,11 +93,11 @@ class MessageService(private val kv: KvStore) {
         val trimmed = json.trim().removePrefix("[").removeSuffix("]").trim()
         if (trimmed.isEmpty()) return emptyList()
 
-        // Split top-level JSON objects (each message is one {...} object).
         val objects = mutableListOf<String>()
         var depth = 0
         val sb = StringBuilder()
         for (c in trimmed) {
+            if (depth == 0 && sb.isEmpty() && c != '{') continue // skip separators between objects
             if (c == '{') depth++
             if (c == '}') depth--
             sb.append(c)

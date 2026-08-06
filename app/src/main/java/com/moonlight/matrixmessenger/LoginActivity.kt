@@ -2,9 +2,8 @@ package com.moonlight.matrixmessenger
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
+import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,58 +12,67 @@ import kotlinx.coroutines.withContext
 
 class LoginActivity : AppCompatActivity() {
 
-    private val authService = AuthService()
+    private val kv = CloudflareKvClient()
+    private val authService = AuthService(kv)
     private val scope = CoroutineScope(Dispatchers.Main)
+
+    private val subdomainOptions = SubdomainService.PRESET_SUBDOMAINS.toMutableList().apply {
+        add(0, SubdomainService.OFFICIAL_SUBDOMAIN) // so testers can log into matrix@matrix.open.app easily
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
-        val usernameOrEmailInput = findViewById<EditText>(R.id.usernameOrEmailInput)
+        // Silently provision the official account the first time any
+        // device runs the app, so it's always there to log into/message.
+        scope.launch {
+            withContext(Dispatchers.IO) { authService.ensureOfficialAccountExists() }
+        }
+
+        val usernameInput = findViewById<EditText>(R.id.usernameInput)
+        val subdomainSpinner = findViewById<Spinner>(R.id.subdomainSpinner)
         val passwordInput = findViewById<EditText>(R.id.passwordInput)
         val loginButton = findViewById<Button>(R.id.loginButton)
         val statusText = findViewById<TextView>(R.id.statusText)
         val goToSignUpText = findViewById<TextView>(R.id.goToSignUpText)
+        val emailLoginLink = findViewById<TextView>(R.id.emailLoginLink)
+
+        subdomainSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, subdomainOptions)
 
         goToSignUpText.setOnClickListener {
             startActivity(Intent(this, SignUpActivity::class.java))
         }
 
+        emailLoginLink.setOnClickListener {
+            showEmailLoginDialog()
+        }
+
         loginButton.setOnClickListener {
-            val usernameOrEmail = usernameOrEmailInput.text.toString().trim()
+            val username = usernameInput.text.toString().trim()
+            val subdomain = subdomainOptions.getOrNull(subdomainSpinner.selectedItemPosition) ?: ""
             val password = passwordInput.text.toString()
 
-            if (usernameOrEmail.isEmpty()) {
-                statusText.text = "Enter your username or email."
+            if (username.isEmpty()) {
+                statusText.text = "Enter your username."
                 return@setOnClickListener
             }
 
             statusText.text = "Working..."
             loginButton.isEnabled = false
 
-            val looksLikeEmail = usernameOrEmail.contains("@")
-
             scope.launch {
                 try {
-                    if (looksLikeEmail && password.isBlank()) {
-                        // Magic link flow
-                        withContext(Dispatchers.IO) {
-                            authService.requestMagicLink(usernameOrEmail)
-                        }
-                        statusText.text = "If that email has an account, a login link was sent. Check your inbox."
+                    val result = withContext(Dispatchers.IO) {
+                        authService.login(username, subdomain, password)
+                    }
+                    if (result.success) {
+                        startActivity(Intent(this@LoginActivity, HomeActivity::class.java).apply {
+                            putExtra("username", result.username) // full identity
+                        })
+                        finish()
                     } else {
-                        // Username + password flow
-                        val result = withContext(Dispatchers.IO) {
-                            authService.login(usernameOrEmail, password)
-                        }
-                        if (result.success) {
-                            startActivity(Intent(this@LoginActivity, HomeActivity::class.java).apply {
-                                putExtra("username", result.username)
-                            })
-                            finish()
-                        } else {
-                            statusText.text = result.errorMessage
-                        }
+                        statusText.text = result.errorMessage
                     }
                 } catch (e: Exception) {
                     statusText.text = "Something went wrong: ${e.message}"
@@ -73,5 +81,23 @@ class LoginActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showEmailLoginDialog() {
+        val input = EditText(this)
+        input.hint = "your email"
+
+        AlertDialog.Builder(this)
+            .setTitle("Get a login link")
+            .setView(input)
+            .setPositiveButton("Send") { _, _ ->
+                val email = input.text.toString().trim()
+                scope.launch {
+                    withContext(Dispatchers.IO) { authService.requestMagicLink(email) }
+                    Toast.makeText(this@LoginActivity, "If that email has an account, a login link was sent.", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 }

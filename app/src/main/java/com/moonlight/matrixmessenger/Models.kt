@@ -2,13 +2,15 @@ package com.moonlight.matrixmessenger
 
 data class UserRecord(
     val username: String,
+    val subdomain: String,
     val passwordHash: String,
     val email: String?,
+    val verified: Boolean,
     val createdAt: Long
 ) {
     fun toJson(): String {
         val emailPart = if (email != null) "\"${escape(email)}\"" else "null"
-        return """{"username":"${escape(username)}","passwordHash":"${escape(passwordHash)}","email":$emailPart,"createdAt":$createdAt}"""
+        return """{"username":"${escape(username)}","subdomain":"${escape(subdomain)}","passwordHash":"${escape(passwordHash)}","email":$emailPart,"verified":$verified,"createdAt":$createdAt}"""
     }
 
     companion object {
@@ -16,8 +18,10 @@ data class UserRecord(
             val map = SimpleJson.parseObject(json)
             return UserRecord(
                 username = map["username"] as String,
+                subdomain = (map["subdomain"] as String?) ?: "matrix.fun", // fallback for pre-subdomain-era records
                 passwordHash = map["passwordHash"] as String,
                 email = map["email"] as String?,
+                verified = (map["verified"] as String?)?.toBoolean() ?: false,
                 createdAt = (map["createdAt"] as String).toLong()
             )
         }

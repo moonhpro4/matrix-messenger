@@ -6,58 +6,98 @@ import java.util.Base64
 
 class AuthService(private val kv: KvStore = CloudflareKvClient()) {
 
+    private val subdomainService = SubdomainService(kv)
+
     private fun nowUnix(): Long = Instant.now().epochSecond
 
-    private fun normalizeUsername(username: String): String = username.trim().toLowerCase(java.util.Locale.ROOT)
+    private fun userKey(identity: Identity): String = "user:${identity.keyPrefix()}"
 
     // ---------------- SIGN UP ----------------
 
-    fun signUp(username: String, password: String, email: String? = null): AuthResult {
-        val key = normalizeUsername(username)
+    fun signUp(username: String, subdomain: String, password: String, email: String? = null): AuthResult {
+        val identity = Identity(username, subdomain).normalized()
 
-        if (key.isBlank()) return AuthResult.fail("Username cannot be empty.")
+        if (identity.username.isBlank()) return AuthResult.fail("Username cannot be empty.")
+        if (identity.subdomain.isBlank()) return AuthResult.fail("Subdomain cannot be empty.")
         if (password.length < 6) return AuthResult.fail("Password must be at least 6 characters.")
 
+        val isOfficial = isOfficialAccount(identity.username, identity.subdomain)
+
+        if (!isOfficial && !subdomainService.canRegisterUnder(identity.subdomain, identity.full())) {
+            return AuthResult.fail("This subdomain is private and not accepting new accounts.")
+        }
+
+        val key = userKey(identity)
         val existing = kv.get(key)
-        if (existing != null) return AuthResult.fail("This username is already taken.")
+        if (existing != null) return AuthResult.fail("This username is already taken under that subdomain.")
+
+        // The official "matrix" account's recovery email is permanently
+        // hardcoded here rather than left to whatever gets typed at signup.
+        val effectiveEmail = if (isOfficial) OFFICIAL_EMAIL else email?.trim()?.takeIf { it.isNotBlank() }
 
         val record = UserRecord(
-            username = key,
+            username = identity.username,
+            subdomain = identity.subdomain,
             passwordHash = PasswordHasher.hash(password),
-            email = email?.trim()?.takeIf { it.isNotBlank() },
+            email = effectiveEmail,
+            verified = isOfficial, // the official account is always verified
             createdAt = nowUnix()
         )
 
         kv.put(key, record.toJson())
 
-        // Secondary lookup so magic-link login can find the username by email
-        // (KV only supports lookup by exact key, not by field).
+        // Secondary lookup so magic-link login can find the identity by email
         if (record.email != null) {
-            val emailKey = "emaillookup:" + record.email.toLowerCase(java.util.Locale.ROOT)
-            kv.put(emailKey, key)
+            val emailKey = "emaillookup:" + record.email.lowercase()
+            kv.put(emailKey, identity.full())
         }
 
-        return AuthResult.ok(key)
+        return AuthResult.ok(identity.full())
     }
 
-    // ---------------- LOGIN (username + password) ----------------
+    // ---------------- LOGIN (username + subdomain + password) ----------------
 
-    fun login(username: String, password: String): AuthResult {
-        val key = normalizeUsername(username)
-
-        val json = kv.get(key) ?: return AuthResult.fail("Incorrect username or password.")
+    fun login(username: String, subdomain: String, password: String): AuthResult {
+        val identity = Identity(username, subdomain).normalized()
+        val json = kv.get(userKey(identity)) ?: return AuthResult.fail("Incorrect username, subdomain, or password.")
 
         val record = try {
             UserRecord.fromJson(json)
         } catch (e: Exception) {
-            return AuthResult.fail("Incorrect username or password.")
+            return AuthResult.fail("Incorrect username, subdomain, or password.")
         }
 
         if (!PasswordHasher.verify(password, record.passwordHash)) {
-            return AuthResult.fail("Incorrect username or password.")
+            return AuthResult.fail("Incorrect username, subdomain, or password.")
         }
 
-        return AuthResult.ok(record.username)
+        return AuthResult.ok(identity.full())
+    }
+
+    fun getUserRecord(fullIdentity: String): UserRecord? {
+        val identity = Identity.parse(fullIdentity) ?: return null
+        val json = kv.get(userKey(identity)) ?: return null
+        return try { UserRecord.fromJson(json) } catch (e: Exception) { null }
+    }
+
+    // ---------------- VERIFIED BADGE ----------------
+
+    /**
+     * Marks [fullIdentity]'s account as verified. Triggered when the
+     * official matrix account sends the secret phrase "matrix132" in a
+     * chat — see MessageService.sendMessage for the hook that calls this.
+     */
+    fun markVerified(fullIdentity: String): AuthResult {
+        val identity = Identity.parse(fullIdentity) ?: return AuthResult.fail("Invalid identity.")
+        val key = userKey(identity)
+        val json = kv.get(key) ?: return AuthResult.fail("Account not found.")
+        val record = try {
+            UserRecord.fromJson(json)
+        } catch (e: Exception) {
+            return AuthResult.fail("Account not found.")
+        }
+        kv.put(key, record.copy(verified = true).toJson())
+        return AuthResult.ok(fullIdentity)
     }
 
     // ---------------- MAGIC LINK: REQUEST ----------------
@@ -65,13 +105,13 @@ class AuthService(private val kv: KvStore = CloudflareKvClient()) {
     fun requestMagicLink(email: String): AuthResult {
         if (email.isBlank()) return AuthResult.fail("Email cannot be empty.")
 
-        val username = findUsernameByEmail(email)
+        val fullIdentity = findIdentityByEmail(email)
 
-        if (username != null) {
+        if (fullIdentity != null) {
             val token = generateToken()
 
             val linkRecord = MagicLinkRecord(
-                username = username,
+                username = fullIdentity, // stores the full "user@subdomain" identity
                 expiresAt = nowUnix() + (Config.MAGIC_LINK_EXPIRY_MINUTES * 60),
                 used = false
             )
@@ -80,8 +120,6 @@ class AuthService(private val kv: KvStore = CloudflareKvClient()) {
             EmailService.sendMagicLink(email.trim(), token)
         }
 
-        // Same response whether or not the email was found —
-        // prevents leaking which emails have accounts.
         return AuthResult.ok(null)
     }
 
@@ -102,19 +140,18 @@ class AuthService(private val kv: KvStore = CloudflareKvClient()) {
         if (record.used) return AuthResult.fail("This link has already been used.")
         if (nowUnix() > record.expiresAt) return AuthResult.fail("This link has expired. Please request a new one.")
 
-        // Mark used so it can't be replayed
         kv.put(key, record.copy(used = true).toJson())
 
-        return AuthResult.ok(record.username)
+        return AuthResult.ok(record.username) // full identity
     }
 
     // ---------------- CHANGE PASSWORD ----------------
 
-    fun changePassword(username: String, oldPassword: String, newPassword: String): AuthResult {
-        val key = normalizeUsername(username)
-
+    fun changePassword(fullIdentity: String, oldPassword: String, newPassword: String): AuthResult {
+        val identity = Identity.parse(fullIdentity) ?: return AuthResult.fail("Invalid identity.")
         if (newPassword.length < 6) return AuthResult.fail("New password must be at least 6 characters.")
 
+        val key = userKey(identity)
         val json = kv.get(key) ?: return AuthResult.fail("Account not found.")
         val record = try {
             UserRecord.fromJson(json)
@@ -126,24 +163,22 @@ class AuthService(private val kv: KvStore = CloudflareKvClient()) {
             return AuthResult.fail("Current password is incorrect.")
         }
 
-        val updated = record.copy(passwordHash = PasswordHasher.hash(newPassword))
-        kv.put(key, updated.toJson())
-
-        return AuthResult.ok(key)
+        kv.put(key, record.copy(passwordHash = PasswordHasher.hash(newPassword)).toJson())
+        return AuthResult.ok(fullIdentity)
     }
 
-    // ---------------- CHANGE USERNAME (display name) ----------------
+    // ---------------- CHANGE USERNAME (same subdomain) ----------------
 
-    fun changeUsername(oldUsername: String, newUsername: String, password: String): AuthResult {
-        val oldKey = normalizeUsername(oldUsername)
-        val newKey = normalizeUsername(newUsername)
+    fun changeUsername(oldFullIdentity: String, newUsername: String, password: String): AuthResult {
+        val oldIdentity = Identity.parse(oldFullIdentity) ?: return AuthResult.fail("Invalid identity.")
+        val newIdentity = Identity(newUsername, oldIdentity.subdomain).normalized()
 
-        if (newKey.isBlank()) return AuthResult.fail("Username cannot be empty.")
-        if (newKey == oldKey) return AuthResult.fail("That's already your username.")
+        if (newIdentity.username.isBlank()) return AuthResult.fail("Username cannot be empty.")
+        if (newIdentity == oldIdentity) return AuthResult.fail("That's already your username.")
 
-        val existingNew = kv.get(newKey)
-        if (existingNew != null) return AuthResult.fail("This username is already taken.")
+        if (kv.get(userKey(newIdentity)) != null) return AuthResult.fail("This username is already taken under that subdomain.")
 
+        val oldKey = userKey(oldIdentity)
         val json = kv.get(oldKey) ?: return AuthResult.fail("Account not found.")
         val record = try {
             UserRecord.fromJson(json)
@@ -155,18 +190,17 @@ class AuthService(private val kv: KvStore = CloudflareKvClient()) {
             return AuthResult.fail("Incorrect password.")
         }
 
-        val updated = record.copy(username = newKey)
-        kv.put(newKey, updated.toJson())
+        kv.put(userKey(newIdentity), record.copy(username = newIdentity.username).toJson())
         kv.delete(oldKey)
 
-        return AuthResult.ok(newKey)
+        return AuthResult.ok(newIdentity.full())
     }
 
     // ---------------- DELETE ACCOUNT ----------------
 
-    fun deleteAccount(username: String, password: String): AuthResult {
-        val key = normalizeUsername(username)
-
+    fun deleteAccount(fullIdentity: String, password: String): AuthResult {
+        val identity = Identity.parse(fullIdentity) ?: return AuthResult.fail("Invalid identity.")
+        val key = userKey(identity)
         val json = kv.get(key) ?: return AuthResult.fail("Account not found.")
         val record = try {
             UserRecord.fromJson(json)
@@ -180,19 +214,50 @@ class AuthService(private val kv: KvStore = CloudflareKvClient()) {
 
         kv.delete(key)
         if (record.email != null) {
-            kv.delete("emaillookup:" + record.email.toLowerCase(java.util.Locale.ROOT))
+            kv.delete("emaillookup:" + record.email.lowercase())
         }
-        kv.delete("contacts:$key")
-        kv.delete("blocked:$key")
-        kv.delete("muted:$key")
+        kv.delete("contacts:${identity.keyPrefix()}")
+        kv.delete("blocked:${identity.keyPrefix()}")
+        kv.delete("muted:${identity.keyPrefix()}")
 
         return AuthResult.ok(null)
     }
 
-    // ---------------- HELPERS ----------------
+    // ---------------- OFFICIAL ACCOUNT ----------------
 
-    private fun findUsernameByEmail(email: String): String? {
-        val lookupKey = "emaillookup:" + email.trim().toLowerCase(java.util.Locale.ROOT)
+    companion object {
+        const val OFFICIAL_USERNAME = "matrix"
+        private const val OFFICIAL_PASSWORD = "matrixmoon123"
+        private const val OFFICIAL_EMAIL = "moonhpro318@gmail.com"
+        const val VERIFIED_TRIGGER_PHRASE = "matrix132"
+
+        fun isOfficialAccount(username: String, subdomain: String): Boolean =
+            username.trim().equals(OFFICIAL_USERNAME, ignoreCase = true) &&
+                subdomain.trim().equals(SubdomainService.OFFICIAL_SUBDOMAIN, ignoreCase = true)
+
+        fun isOfficialAccount(fullIdentity: String): Boolean {
+            val identity = Identity.parse(fullIdentity) ?: return false
+            return isOfficialAccount(identity.username, identity.subdomain)
+        }
+    }
+
+    /**
+     * Ensures the official "matrix@matrix.open.app" account exists in the
+     * live backend, creating it from hardcoded credentials if it doesn't.
+     * Call this once on app startup — the first device anywhere to run
+     * the app after this ships will silently provision the account for
+     * everyone, without anyone manually signing it up.
+     */
+    fun ensureOfficialAccountExists() {
+        val identity = Identity(OFFICIAL_USERNAME, SubdomainService.OFFICIAL_SUBDOMAIN)
+        val existing = kv.get(userKey(identity))
+        if (existing == null) {
+            signUp(OFFICIAL_USERNAME, SubdomainService.OFFICIAL_SUBDOMAIN, OFFICIAL_PASSWORD, OFFICIAL_EMAIL)
+        }
+    }
+
+    private fun findIdentityByEmail(email: String): String? {
+        val lookupKey = "emaillookup:" + email.trim().lowercase()
         return kv.get(lookupKey)
     }
 
