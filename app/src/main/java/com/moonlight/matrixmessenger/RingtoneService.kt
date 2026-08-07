@@ -42,6 +42,25 @@ class RingtoneService(private val kv: KvStore) {
         // Keep custom ringtones small so KV writes/reads stay fast on
         // older/slower hardware and connections.
         const val MAX_RINGTONE_BYTES = 2 * 1024 * 1024 // 2MB
+
+        /**
+         * Single source of truth for built-in ringtones — (display name,
+         * raw resource file name without extension). Both
+         * RingtoneSettingsActivity and CallActivity read this SAME list
+         * (resolving the res/raw resource ID dynamically via
+         * resources.getIdentifier) instead of each keeping their own
+         * hardcoded copy, so the two can never drift out of sync.
+         */
+        val BUILT_IN_RINGTONES = listOf(
+            "Pulse (default)" to "ringtone",
+            "Frrank" to "frrank",
+            "Halloween Ringtone" to "halloween_ringtone",
+            "Matone" to "matone",
+            "Nerdeysen" to "nerdeysen",
+            "Offical Matrix Ringtone" to "offical_matrix_ringtone",
+            "Sus Ohio Ringotne" to "sus_ohio_ringotne",
+            "Wieird Ringtone" to "wieird_ringtone"
+        )
     }
 
     private fun listKey(owner: String) = "ringtones:${owner.trim().toLowerCase(java.util.Locale.ROOT)}"

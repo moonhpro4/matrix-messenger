@@ -28,18 +28,14 @@ class RingtoneSettingsActivity : AppCompatActivity() {
     private lateinit var ringtoneList: ListView
     private var previewPlayer: MediaPlayer? = null
 
-    // Bundled built-in ringtones — picked by fans, not handpicked.
-    // Report any copyright concern to moonhpro318@gmail.com and it comes down fast.
-    private val builtInRingtones = listOf(
-        "Pulse (default)" to R.raw.ringtone,
-        "Frrank" to R.raw.frrank,
-        "Halloween Ringtone" to R.raw.halloween_ringtone,
-        "Matone" to R.raw.matone,
-        "Nerdeysen" to R.raw.nerdeysen,
-        "Offical Matrix Ringtone" to R.raw.offical_matrix_ringtone,
-        "Sus Ohio Ringotne" to R.raw.sus_ohio_ringotne,
-        "Wieird Ringtone" to R.raw.wieird_ringtone
-    )
+    // Built-in ringtones — resolved dynamically from RingtoneService's
+    // single shared list (name -> raw resource file name), so this can
+    // never drift out of sync with CallActivity's copy.
+    private val builtInRingtones: List<Pair<String, Int>> by lazy {
+        RingtoneService.BUILT_IN_RINGTONES.map { (name, resFileName) ->
+            name to resources.getIdentifier(resFileName, "raw", packageName)
+        }
+    }
 
     // Rows: builtInRingtones first (position = index into builtInRingtones),
     // then customRingtones after (position - builtInRingtones.size).

@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.os.Bundle
 import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import org.webrtc.*
 import java.util.concurrent.ConcurrentHashMap
@@ -84,7 +85,10 @@ class CallActivity : AppCompatActivity() {
         cameraEnabled = startAsVideo
 
         bindViews()
-        initWebRtc()
+        if (!initWebRtc()) {
+            finish()
+            return
+        }
         setUpLocalAudio()
         if (startAsVideo) {
             enableCamera()
@@ -117,7 +121,7 @@ class CallActivity : AppCompatActivity() {
 
     // ---------------- WebRTC setup ----------------
 
-    private fun initWebRtc() {
+    private fun initWebRtc(): Boolean {
         eglBase = EglBase.create()
 
         PeerConnectionFactory.initialize(
@@ -135,7 +139,7 @@ class CallActivity : AppCompatActivity() {
 
         val rtcConfig = PeerConnection.RTCConfiguration(ICE_SERVERS)
 
-        peerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
+        val newPeerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate?) {
                 if (candidate == null) return
                 val json = """{"sdpMid":"${candidate.sdpMid}","sdpMLineIndex":${candidate.sdpMLineIndex},"candidate":"${candidate.sdp.replace("\"", "\\\"")}"}"""
@@ -166,7 +170,17 @@ class CallActivity : AppCompatActivity() {
             override fun onRemoveStream(p0: MediaStream?) {}
             override fun onDataChannel(p0: DataChannel?) {}
             override fun onRenegotiationNeeded() {}
-        })!!
+        })
+
+        if (newPeerConnection == null) {
+            // WebRTC can genuinely fail to create a PeerConnection (bad ICE
+            // config, device-level init issues) — this must NOT crash the
+            // app, since it would crash on every single call attempt.
+            Toast.makeText(this, "Couldn't start the call — please try again", Toast.LENGTH_LONG).show()
+            return false
+        }
+        peerConnection = newPeerConnection
+        return true
     }
 
     private fun setUpLocalAudio() {
@@ -279,12 +293,11 @@ class CallActivity : AppCompatActivity() {
     private fun playRingtone() {
         stopAllCallSounds()
 
-        // Keep this list in the same order as RingtoneSettingsActivity's
-        // builtInRingtones, since "builtin:N" refers to this index.
-        val builtInResIds = listOf(
-            R.raw.ringtone, R.raw.frrank, R.raw.halloween_ringtone, R.raw.matone,
-            R.raw.nerdeysen, R.raw.offical_matrix_ringtone, R.raw.sus_ohio_ringotne, R.raw.wieird_ringtone
-        )
+        // Resolved dynamically from RingtoneService's single shared list —
+        // can never drift out of sync with RingtoneSettingsActivity's copy.
+        val builtInResIds = RingtoneService.BUILT_IN_RINGTONES.map { (_, resFileName) ->
+            resources.getIdentifier(resFileName, "raw", packageName)
+        }
 
         val ringtoneService = RingtoneService(CloudflareKvClient())
         Thread {
@@ -468,11 +481,11 @@ class CallActivity : AppCompatActivity() {
         super.onDestroy()
         signalingActive = false
         stopAllCallSounds()
-        audioManager.mode = AudioManager.MODE_NORMAL
-        remoteVideoView.release()
-        localVideoView.release()
+        if (::audioManager.isInitialized) audioManager.mode = AudioManager.MODE_NORMAL
+        if (::remoteVideoView.isInitialized) remoteVideoView.release()
+        if (::localVideoView.isInitialized) localVideoView.release()
         if (::peerConnection.isInitialized) peerConnection.close()
-        peerConnectionFactory.dispose()
-        eglBase.release()
+        if (::peerConnectionFactory.isInitialized) peerConnectionFactory.dispose()
+        if (::eglBase.isInitialized) eglBase.release()
     }
 }
