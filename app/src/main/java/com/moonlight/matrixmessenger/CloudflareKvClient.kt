@@ -20,15 +20,13 @@ interface KvStore {
 }
 
 /**
- * Talks to our Cloudflare Worker proxy (matrix-messenger-worker.js),
- * NOT Cloudflare's API directly. The Worker holds the real KV binding
- * server-side, so no API token needs to exist in this app at all —
- * this is what finally ends the token-leak/revocation loop we kept
- * hitting when a token lived in committed code or public web JS.
+ * Talks to matrix-server, our open-source Railway-hosted backend
+ * (https://github.com/moonhpro4/matrix-server), not Cloudflare's API or
+ * the Cloudflare Worker directly. No API token exists in this app at all.
  */
 class CloudflareKvClient : KvStore {
 
-    private val workerBase = "https://matrix.opergo.workers.dev/kv/"
+    private val workerBase = "https://matrix-server-app-v2-production.up.railway.app/kv/"
 
     override fun get(key: String): String? {
         val url = URL(workerBase + URLEncoder.encode(key, "UTF-8"))

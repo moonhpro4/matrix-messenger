@@ -4,6 +4,8 @@ An open-source messenger app built with Kotlin — free chat, messaging, and cal
 
 🌐 **Official website: [moonhpro4.github.io/matrix-messenger](https://moonhpro4.github.io/matrix-messenger/)**
 
+⚙️ **Powered by [matrix-server](https://github.com/moonhpro4/matrix-server)** — our own open-source, free, unlimited backend. Anyone can fork it and build their own thing on top.
+
 > ⚠️ **This project is in beta.** Expect bugs. Found one? [Open an issue](../../issues/new).
 
 ## Features (in progress)
