@@ -22,6 +22,16 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val savedSession = SessionManager.getSession(this)
+        if (savedSession != null) {
+            startActivity(Intent(this, HomeActivity::class.java).apply {
+                putExtra("username", savedSession)
+            })
+            finish()
+            return
+        }
+
         setContentView(R.layout.activity_login)
 
         // Silently provision the official account the first time any
@@ -73,6 +83,7 @@ class LoginActivity : AppCompatActivity() {
                         authService.login(username, subdomain, password)
                     }
                     if (result.success) {
+                        SessionManager.saveSession(this@LoginActivity, result.username!!)
                         startActivity(Intent(this@LoginActivity, HomeActivity::class.java).apply {
                             putExtra("username", result.username) // full identity
                         })
