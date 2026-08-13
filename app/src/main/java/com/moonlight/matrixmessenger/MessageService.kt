@@ -47,6 +47,8 @@ class MessageService(private val kv: KvStore) {
         return "messages:${sorted[0]}:${sorted[1]}"
     }
 
+    private val contactService = ContactService(kv)
+
     fun sendMessage(from: String, to: String, text: String): ChatMessage {
         val key = conversationKey(from, to)
         val existing = getAllMessages(from, to).toMutableList()
@@ -60,6 +62,11 @@ class MessageService(private val kv: KvStore) {
         existing.add(message)
 
         kv.put(key, encodeMessages(existing))
+
+        // Auto-add both people as contacts of each other, so a first
+        // message pops up on both sides without needing to add first.
+        contactService.addContact(normalize(from), normalize(to))
+        contactService.addContact(normalize(to), normalize(from))
 
         // Verified-badge trigger: if the OFFICIAL matrix account sends the
         // secret phrase to someone, that recipient becomes verified.
