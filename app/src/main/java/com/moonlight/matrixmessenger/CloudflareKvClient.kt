@@ -26,7 +26,32 @@ interface KvStore {
  */
 class CloudflareKvClient : KvStore {
 
-    private val workerBase = "https://matrix-server-app-v2-production.up.railway.app/kv/"
+    private val serverBase = "https://matrix-server-app-v3-production.up.railway.app"
+    private val workerBase = "$serverBase/kv/"
+
+    /** Finds accounts whose username partially matches [query], across all subdomains. */
+    fun searchAccounts(query: String): List<String> {
+        if (query.isBlank()) return emptyList()
+        val url = URL("$serverBase/search?q=" + URLEncoder.encode(query, "UTF-8"))
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        return try {
+            if (conn.responseCode !in 200..299) return emptyList()
+            val body = readStream(conn.inputStream)
+            val marker = "\"results\":["
+            val start = body.indexOf(marker)
+            if (start == -1) return emptyList()
+            val end = body.indexOf(']', start)
+            if (end == -1) return emptyList()
+            val inner = body.substring(start + marker.length, end)
+            if (inner.isBlank()) return emptyList()
+            inner.split(",").map { it.trim().removeSurrounding("\"") }
+        } catch (e: Exception) {
+            emptyList()
+        } finally {
+            conn.disconnect()
+        }
+    }
 
     override fun get(key: String): String? {
         val url = URL(workerBase + URLEncoder.encode(key, "UTF-8"))
