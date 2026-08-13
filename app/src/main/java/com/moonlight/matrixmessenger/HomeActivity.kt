@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.inputmethod.EditorInfo
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.CoroutineScope
@@ -19,9 +18,10 @@ class HomeActivity : AppCompatActivity() {
     private val authService = AuthService(kv)
     private val scope = CoroutineScope(Dispatchers.Main)
 
-    private lateinit var currentUsername: String // full identity, e.g. "bob@matrix.fun"
+    private lateinit var currentUsername: String
     private lateinit var contactsList: ListView
     private var allContacts: List<String> = emptyList()
+    private var displayedRows: List<String> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,10 +31,6 @@ class HomeActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.welcomeText).text = "Welcome, $currentUsername"
         contactsList = findViewById(R.id.contactsList)
-
-        findViewById<Button>(R.id.addContactButton).setOnClickListener {
-            showAddContactDialog()
-        }
 
         findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
             val intent = Intent(this, SettingsActivity::class.java)
@@ -46,19 +42,10 @@ class HomeActivity : AppCompatActivity() {
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                renderFilteredContacts(s.toString())
+                onSearchQueryChanged(s.toString())
             }
             override fun afterTextChanged(s: Editable?) {}
         })
-        searchInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE) {
-                val query = searchInput.text.toString().trim()
-                if (Identity.parse(query) != null && !allContacts.contains(query.lowercase())) {
-                    addContact(query)
-                }
-                true
-            } else false
-        }
 
         loadContacts()
     }
@@ -69,39 +56,65 @@ class HomeActivity : AppCompatActivity() {
                 allContacts = withContext(Dispatchers.IO) {
                     contactService.listContacts(currentUsername)
                 }
-                renderFilteredContacts(findViewById<EditText>(R.id.searchInput).text.toString())
+                onSearchQueryChanged(findViewById<EditText>(R.id.searchInput).text.toString())
             } catch (e: Exception) {
                 Toast.makeText(this@HomeActivity, "Couldn't load contacts — check your connection", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    private fun renderFilteredContacts(query: String) {
-        val filtered = if (query.isBlank()) allContacts else allContacts.filter { it.contains(query.trim().lowercase()) }
+    private fun onSearchQueryChanged(query: String) {
+        val trimmed = query.trim().lowercase()
+
+        if (trimmed.isBlank()) {
+            renderRows(allContacts, emptyList())
+            return
+        }
+
+        val matchingContacts = allContacts.filter { it.contains(trimmed) }
 
         scope.launch {
             try {
-                val labels = filtered.map { identity ->
-                    withContext(Dispatchers.IO) { labelFor(identity) }
-                }
-                val adapter = ArrayAdapter(this@HomeActivity, android.R.layout.simple_list_item_1, labels)
-                contactsList.adapter = adapter
-                contactsList.setOnItemClickListener { _, _, position, _ ->
-                    openChat(filtered[position])
-                }
+                val serverResults = withContext(Dispatchers.IO) { kv.searchAccounts(trimmed) }
+                val newResults = serverResults.filter { !allContacts.contains(it) && it != currentUsername }
+                renderRows(matchingContacts, newResults)
             } catch (e: Exception) {
-                // Leave the previous list showing rather than crash on a network blip.
+                renderRows(matchingContacts, emptyList())
             }
         }
     }
 
-    /** Adds "✓ Official Matrix Account" / "✓ Verified" markers next to the name. */
+    private fun renderRows(contactMatches: List<String>, newResults: List<String>) {
+        scope.launch {
+            try {
+                val contactLabels = contactMatches.map { withContext(Dispatchers.IO) { labelFor(it) } }
+                val newLabels = newResults.map { "+ Add ${Identity.parse(it)?.username ?: it}  (${Identity.parse(it)?.subdomain ?: ""})" }
+
+                displayedRows = contactMatches + newResults
+                val allLabels = contactLabels + newLabels
+
+                contactsList.adapter = ArrayAdapter(this@HomeActivity, android.R.layout.simple_list_item_1, allLabels)
+                contactsList.setOnItemClickListener { _, _, position, _ ->
+                    val identity = displayedRows[position]
+                    if (position < contactMatches.size) {
+                        openChat(identity)
+                    } else {
+                        addContactThenOpenChat(identity)
+                    }
+                }
+            } catch (e: Exception) {
+                // Leave previous list showing rather than crash on a network blip.
+            }
+        }
+    }
+
     private fun labelFor(identity: String): String {
+        val displayName = Identity.parse(identity)?.username ?: identity
         if (AuthService.isOfficialAccount(identity)) {
-            return "✓ $identity — Official Matrix Account"
+            return "✓ $displayName — Official Matrix Account"
         }
         val record = authService.getUserRecord(identity)
-        return if (record?.verified == true) "✓ $identity — Verified" else identity
+        return if (record?.verified == true) "✓ $displayName — Verified" else displayName
     }
 
     private fun openChat(contactIdentity: String) {
@@ -111,27 +124,13 @@ class HomeActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun showAddContactDialog() {
-        val input = EditText(this)
-        input.hint = "name@subdomain"
-
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Add contact")
-            .setView(input)
-            .setPositiveButton("Add") { _, _ ->
-                addContact(input.text.toString().trim())
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun addContact(identityToAdd: String) {
+    private fun addContactThenOpenChat(identityToAdd: String) {
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 contactService.addContact(currentUsername, identityToAdd)
             }
-            if (result.success) {
-                Toast.makeText(this@HomeActivity, "Added $identityToAdd", Toast.LENGTH_SHORT).show()
+            if (result.success || result.errorMessage == "Already in your contacts.") {
+                openChat(identityToAdd)
                 loadContacts()
             } else {
                 Toast.makeText(this@HomeActivity, result.errorMessage, Toast.LENGTH_SHORT).show()
