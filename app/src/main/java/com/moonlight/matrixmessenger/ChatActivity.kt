@@ -62,7 +62,15 @@ class ChatActivity : AppCompatActivity() {
         messagesList = findViewById(R.id.messagesList)
         recordingHintText = findViewById(R.id.recordingHintText)
 
-        findViewById<TextView>(R.id.contactNameText).text = otherUsername
+        val otherDisplayName = Identity.parse(otherUsername)?.username ?: otherUsername
+        findViewById<TextView>(R.id.contactNameText).text = otherDisplayName
+
+        findViewById<ImageButton>(R.id.voiceCallButton).setOnClickListener {
+            startCall(isVideo = false)
+        }
+        findViewById<ImageButton>(R.id.videoCallButton).setOnClickListener {
+            startCall(isVideo = true)
+        }
         loadBadge()
 
         val messageInput = findViewById<EditText>(R.id.messageInput)
@@ -101,6 +109,24 @@ class ChatActivity : AppCompatActivity() {
     }
 
     // ---------------- Text messages + polling ----------------
+
+    private val callService = CallService(kv)
+
+    private fun startCall(isVideo: Boolean) {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { callService.startCall(currentUsername, otherUsername) }
+                val intent = Intent(this@ChatActivity, CallActivity::class.java)
+                intent.putExtra("username", currentUsername)
+                intent.putExtra("otherUsername", otherUsername)
+                intent.putExtra("startAsVideo", isVideo)
+                intent.putExtra("isIncoming", false)
+                startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(this@ChatActivity, "Couldn't start the call — check your connection", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     private fun sendText(text: String) {
         scope.launch {
