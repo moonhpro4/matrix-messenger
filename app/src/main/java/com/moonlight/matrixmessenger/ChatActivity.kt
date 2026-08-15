@@ -47,6 +47,7 @@ class ChatActivity : AppCompatActivity() {
 
     private var mediaRecorder: MediaRecorder? = null
     private var recordingFile: java.io.File? = null
+    private var recordingStartTime: Long = 0
     private var isRecording = false
     private var touchStartX = 0f
     private var recordingCancelled = false
@@ -267,6 +268,7 @@ class ChatActivity : AppCompatActivity() {
     private fun startRecording() {
         try {
             recordingFile = java.io.File.createTempFile("recording", ".mp3", cacheDir)
+            recordingStartTime = System.currentTimeMillis()
             mediaRecorder = MediaRecorder().apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -285,6 +287,13 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun stopAndSendRecording() {
+        val recordedDurationMs = System.currentTimeMillis() - recordingStartTime
+        if (recordedDurationMs < 400) {
+            discardRecording()
+            Toast.makeText(this, "Hold a little longer to record", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         try {
             mediaRecorder?.stop()
             mediaRecorder?.release()
@@ -294,17 +303,22 @@ class ChatActivity : AppCompatActivity() {
 
             val file = recordingFile ?: return
             scope.launch {
-                val bytes = withContext(Dispatchers.IO) { file.readBytes() }
-                if (bytes.size > RingtoneService.MAX_RINGTONE_BYTES) {
-                    Toast.makeText(this@ChatActivity, "That recording is too long — keep it under 2MB.", Toast.LENGTH_SHORT).show()
-                    return@launch
+                try {
+                    val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+                    if (bytes.size > RingtoneService.MAX_RINGTONE_BYTES) {
+                        Toast.makeText(this@ChatActivity, "That recording is too long — keep it under 2MB.", Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    withContext(Dispatchers.IO) {
+                        messageService.sendMessage(currentUsername, otherUsername, VOICE_MARKER + encoded)
+                    }
+                    loadMessages()
+                } catch (e: Exception) {
+                    Toast.makeText(this@ChatActivity, "Voice message failed to send: ${e.message}", Toast.LENGTH_LONG).show()
+                } finally {
+                    file.delete()
                 }
-                val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                withContext(Dispatchers.IO) {
-                    messageService.sendMessage(currentUsername, otherUsername, VOICE_MARKER + encoded)
-                }
-                loadMessages()
-                file.delete()
             }
         } catch (e: Exception) {
             Toast.makeText(this, "Couldn't send recording: ${e.message}", Toast.LENGTH_SHORT).show()
