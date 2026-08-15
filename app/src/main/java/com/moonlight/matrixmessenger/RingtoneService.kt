@@ -53,7 +53,6 @@ class RingtoneService(private val kv: KvStore) {
          */
         val BUILT_IN_RINGTONES = listOf(
             "Pulse (default)" to "ringtone",
-            "Frrank" to "frrank",
             "Halloween Ringtone" to "halloween_ringtone",
             "Matone" to "matone",
             "Nerdeysen" to "nerdeysen",
