@@ -41,7 +41,7 @@ class RingtoneService(private val kv: KvStore) {
     companion object {
         // Keep custom ringtones small so KV writes/reads stay fast on
         // older/slower hardware and connections.
-        const val MAX_RINGTONE_BYTES = 2 * 1024 * 1024 // 2MB
+        const val MAX_RINGTONE_BYTES = 1024L * 1024 * 1024 // 1GB - matches Postgres TEXT column's practical ceiling
 
         /**
          * Single source of truth for built-in ringtones — (display name,
